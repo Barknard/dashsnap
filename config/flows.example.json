@@ -1,0 +1,103 @@
+{
+  "defaults": {
+    "clickWaitSeconds": 1,
+    "snapWaitSeconds": 0.5,
+    "navigationTimeoutSeconds": 30
+  },
+  "flows": [
+    {
+      "id": "example-sales-dashboard",
+      "name": "Sales Dashboard Weekly Report",
+      "description": "Captures the main KPIs, revenue chart, and pipeline breakdown from the Sales dashboard every Monday.",
+      "template": "",
+      "createdAt": "2025-06-01T09:00:00Z",
+      "updatedAt": "2025-06-01T09:00:00Z",
+      "steps": [
+        {
+          "type": "NAVIGATE",
+          "id": "step-nav-login",
+          "label": "Open dashboard login page",
+          "url": "https://dashboard.example.com/login"
+        },
+        {
+          "type": "WAIT",
+          "id": "step-wait-load",
+          "label": "Wait for page to fully load",
+          "seconds": 3
+        },
+        {
+          "type": "CLICK",
+          "id": "step-click-sso",
+          "label": "Click SSO login button",
+          "selector": "[data-testid='sso-login-btn']",
+          "fallbackXY": [960, 540],
+          "selectorStrategy": "data-attr"
+        },
+        {
+          "type": "WAIT",
+          "id": "step-wait-auth",
+          "label": "Wait for SSO redirect to complete",
+          "seconds": 5
+        },
+        {
+          "type": "NAVIGATE",
+          "id": "step-nav-sales",
+          "label": "Navigate to sales dashboard",
+          "url": "https://dashboard.example.com/sales/overview"
+        },
+        {
+          "type": "WAIT",
+          "id": "step-wait-render",
+          "label": "Wait for charts to render",
+          "seconds": 4
+        },
+        {
+          "type": "SNAP",
+          "id": "step-snap-kpis",
+          "label": "Capture KPI summary cards",
+          "region": { "x": 0, "y": 80, "width": 1920, "height": 300 }
+        },
+        {
+          "type": "SCROLL",
+          "id": "step-scroll-chart",
+          "label": "Scroll down to revenue chart",
+          "x": 0,
+          "y": 600
+        },
+        {
+          "type": "WAIT",
+          "id": "step-wait-chart-anim",
+          "label": "Wait for chart animation",
+          "seconds": 2
+        },
+        {
+          "type": "SNAP",
+          "id": "step-snap-revenue",
+          "label": "Capture revenue trend chart",
+          "region": { "x": 50, "y": 100, "width": 1200, "height": 600 },
+          "fullPage": false
+        },
+        {
+          "type": "CLICK",
+          "id": "step-click-pipeline",
+          "label": "Click Pipeline tab",
+          "selector": "[aria-label='Pipeline']",
+          "selectorStrategy": "aria-label"
+        },
+        {
+          "type": "WAIT",
+          "id": "step-wait-pipeline",
+          "label": "Wait for pipeline view to load",
+          "seconds": 3
+        },
+        {
+          "type": "SNAP",
+          "id": "step-snap-pipeline",
+          "label": "Capture full pipeline breakdown",
+          "region": { "x": 0, "y": 0, "width": 1920, "height": 1080 },
+          "fullPage": true
+        }
+      ]
+    }
+  ]
+}

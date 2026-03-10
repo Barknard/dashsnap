@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+@theme {
+  /* Warm charcoal-indigo dark theme */
+  --color-ds-bg: #13111C;
+  --color-ds-surface: #1C1A29;
+  --color-ds-surface-hover: #262435;
+  --color-ds-border: #332F45;
+  --color-ds-border-bright: #4A4560;
+  --color-ds-text: #EEEDF5;
+  --color-ds-text-muted: #A9A5BE;
+  --color-ds-text-dim: #716D87;
+  --color-ds-accent: #7C5CFC;
+  --color-ds-accent-hover: #6A47F0;
+  --color-ds-accent-glow: rgba(124, 92, 252, 0.18);
+  --color-ds-cyan: #22D3EE;
+  --color-ds-emerald: #34D399;
+  --color-ds-amber: #FBBF24;
+  --color-ds-red: #F87171;
+  --color-ds-purple: #A78BFA;
+  --color-ds-glass: rgba(28, 26, 41, 0.85);
+}
+
+/* Sidebar width variable — used by dialogs and overlays to stay within the panel */
+:root {
+  --sidebar-w: 380px;
+}
+
+/* Bump small text sizes globally — make the app more readable */
+.text-xs {
+  font-size: 0.8125rem !important; /* 13px instead of 12px */
+  line-height: 1.25rem !important;
+}
+.text-sm {
+  font-size: 0.9375rem !important; /* 15px instead of 14px */
+  line-height: 1.375rem !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ds-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ds-border-bright);
+}
+
+/* Selection */
+::selection {
+  background: var(--color-ds-accent-glow);
+  color: var(--color-ds-text);
+}
+
+/* Focus rings */
+*:focus-visible {
+  outline: 2px solid var(--color-ds-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Smooth transitions globally */
+*, *::before, *::after {
+  transition-property: color, background-color, border-color, box-shadow, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+/* Disable transition on layout properties to keep things snappy */
+.no-transition {
+  transition: none !important;
+}
+
+/* Glass effect utility */
+.glass {
+  background: var(--color-ds-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Glow utility */
+.glow-accent {
+  box-shadow: 0 0 20px var(--color-ds-accent-glow);
+}
+
+/* Pulsing recording dot */
+@keyframes pulse-recording {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+.animate-pulse-recording {
+  animation: pulse-recording 1.5s ease-in-out infinite;
+}
+
+/* Spin for reload button */
+@keyframes spin-once {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin-once {
+  animation: spin-once 0.5s ease-out;
+}
+
+/* Slide in from left */
+@keyframes slide-in {
+  from { transform: translateX(-10px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.animate-slide-in {
+  animation: slide-in 0.2s ease-out;
+}

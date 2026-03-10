@@ -1,0 +1,30 @@
+{
+  "_comment": "DashSnap settings. Copy this file to settings.json and customize.",
+
+  "browserProfilePath": "",
+  "_browserProfilePath_note": "Path to a Chrome/Edge user profile directory. Leave empty to use a fresh session each time. Example: C:\\Users\\You\\AppData\\Local\\Google\\Chrome\\User Data\\Default",
+
+  "outputPath": "",
+  "_outputPath_note": "Directory where PPTX files are saved. Defaults to ~/Documents/DashSnap if empty.",
+
+  "defaultTemplate": "",
+  "_defaultTemplate_note": "Path to a .pptx template file to use for all flows. Individual flows can override this.",
+
+  "startUrl": "about:blank",
+  "_startUrl_note": "URL loaded when DashSnap starts. Set to your most-used dashboard for convenience.",
+
+  "theme": "dark",
+  "_theme_note": "UI theme: 'dark' or 'light'.",
+
+  "showTips": true,
+  "_showTips_note": "Show helpful tips and onboarding hints in the UI.",
+
+  "windowBounds": {
+    "width": 1400,
+    "height": 900
+  },
+  "_windowBounds_note": "Window size and position. Updated automatically when you resize/move the window. Optional x/y for position.",
+
+  "sidebarWidth": 320,
+  "_sidebarWidth_note": "Width of the flow editor sidebar in pixels. Min: 240, Max: 600."
+}

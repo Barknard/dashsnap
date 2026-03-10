@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist-electron/
+release/
+config/flows.json
+config/settings.json
+*.log
+run_log.txt
+output/
+browser_profile/
+build-resources/icon.ico
+DashSnap_Data/
+package-lock.json
