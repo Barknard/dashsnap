@@ -41,12 +41,12 @@ contextBridge.exposeInMainWorld('dashsnap', {
       const handler = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => callback(...args);
       ipcRenderer.on(channel, handler);
       // Store reference for cleanup
-      (callback as Record<string, unknown>).__handler = handler;
+      (callback as unknown as Record<string, unknown>).__handler = handler;
     }
   },
 
   off: (channel: string, callback: (...args: unknown[]) => void) => {
-    const handler = (callback as Record<string, unknown>).__handler as
+    const handler = (callback as unknown as Record<string, unknown>).__handler as
       ((_event: Electron.IpcRendererEvent, ...args: unknown[]) => void) | undefined;
     if (handler) {
       ipcRenderer.removeListener(channel, handler);

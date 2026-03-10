@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronLeft, ChevronRight, RotateCw, Globe, Star, Trash2, Bookmark } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RotateCw, Globe, Star, Trash2, Bookmark as BookmarkIcon } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
 import { browser } from '@/lib/ipc';
@@ -140,7 +140,7 @@ export function UrlBar() {
         <DropdownMenu.Trigger asChild>
           <Tooltip content="Bookmarks">
             <Button variant="ghost" size="icon-sm" className="relative">
-              <Bookmark className="w-3.5 h-3.5" />
+              <BookmarkIcon className="w-3.5 h-3.5" />
               {bookmarks.length > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-ds-accent text-[9px] font-bold text-white leading-none px-0.5">
                   {bookmarks.length}
