@@ -57,6 +57,14 @@ export const browser = {
     if (!isElectron) return;
     window.dashsnap!.on('browser:title-changed', cb as (...args: unknown[]) => void);
   },
+  highlightElement: (selector: string) => {
+    if (!isElectron) return;
+    window.dashsnap!.send('browser:highlight-element', selector);
+  },
+  clearHighlight: () => {
+    if (!isElectron) return;
+    window.dashsnap!.send('browser:clear-highlight');
+  },
 };
 
 // ─── Recorder ───────────────────────────────────────────────────────────────

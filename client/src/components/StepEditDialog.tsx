@@ -42,6 +42,7 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
   const [clearFirst, setClearFirst] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
+  const [clickOffAfter, setClickOffAfter] = useState(true);
 
   useEffect(() => {
     if (!step) return;
@@ -49,8 +50,8 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
     if (step.type === 'WAIT') setSeconds(step.seconds);
     if (step.type === 'NAVIGATE') setUrl(step.url);
     if (step.type === 'SCROLL') { setScrollX(step.x); setScrollY(step.y); }
-    if (step.type === 'SELECT') setOptionValue(step.optionValue);
-    if (step.type === 'TYPE') { setTypeText(step.text); setClearFirst(step.clearFirst ?? false); }
+    if (step.type === 'SELECT') { setOptionValue(step.optionValue); setClickOffAfter(step.clickOffAfter !== false); }
+    if (step.type === 'TYPE') { setTypeText(step.text); setClearFirst(step.clearFirst ?? false); setClickOffAfter(step.clickOffAfter !== false); }
     if (step.type === 'SCROLL_ELEMENT') { setScrollTop(step.scrollTop); setScrollLeft(step.scrollLeft ?? 0); }
   }, [step]);
 
@@ -63,8 +64,8 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
     if (step.type === 'WAIT') (updates as Record<string, unknown>).seconds = seconds;
     if (step.type === 'NAVIGATE') (updates as Record<string, unknown>).url = url;
     if (step.type === 'SCROLL') { (updates as Record<string, unknown>).x = scrollX; (updates as Record<string, unknown>).y = scrollY; }
-    if (step.type === 'SELECT') (updates as Record<string, unknown>).optionValue = optionValue;
-    if (step.type === 'TYPE') { (updates as Record<string, unknown>).text = typeText; (updates as Record<string, unknown>).clearFirst = clearFirst; }
+    if (step.type === 'SELECT') { (updates as Record<string, unknown>).optionValue = optionValue; (updates as Record<string, unknown>).clickOffAfter = clickOffAfter; }
+    if (step.type === 'TYPE') { (updates as Record<string, unknown>).text = typeText; (updates as Record<string, unknown>).clearFirst = clearFirst; (updates as Record<string, unknown>).clickOffAfter = clickOffAfter; }
     if (step.type === 'SCROLL_ELEMENT') { (updates as Record<string, unknown>).scrollTop = scrollTop; (updates as Record<string, unknown>).scrollLeft = scrollLeft; }
     updateStep(step.id, updates);
     onClose();
@@ -261,6 +262,15 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
                     placeholder="Option value to select..."
                   />
                 </div>
+                <label className="flex items-center gap-2 text-xs text-ds-text-muted cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={clickOffAfter}
+                    onChange={e => setClickOffAfter(e.target.checked)}
+                    className="rounded border-ds-border"
+                  />
+                  Click off after (apply filter)
+                </label>
               </>
             )}
 
@@ -294,6 +304,15 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
                     className="rounded border-ds-border"
                   />
                   Clear field first
+                </label>
+                <label className="flex items-center gap-2 text-xs text-ds-text-muted cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={clickOffAfter}
+                    onChange={e => setClickOffAfter(e.target.checked)}
+                    className="rounded border-ds-border"
+                  />
+                  Click off after (apply filter)
                 </label>
               </>
             )}

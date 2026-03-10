@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Switch from '@radix-ui/react-switch';
 import {
@@ -15,6 +15,7 @@ import { Tooltip } from './ui/Tooltip';
 import { EmptyState } from './EmptyState';
 import { useFlowStore } from '@/stores/flowStore';
 import { useAppStore } from '@/stores/appStore';
+import { browser } from '@/lib/ipc';
 import { cn, truncate } from '@/lib/utils';
 
 const stepIcons: Record<string, typeof MousePointer> = {
@@ -70,10 +71,51 @@ export function StepList({ onEditStep }: StepListProps) {
   const moveStepUp = useFlowStore(s => s.moveStepUp);
   const moveStepDown = useFlowStore(s => s.moveStepDown);
   const updateStep = useFlowStore(s => s.updateStep);
+  const reorderStep = useFlowStore(s => s.reorderStep);
   const runProgress = useAppStore(s => s.runProgress);
   const setActiveTab = useAppStore(s => s.setActiveTab);
   const globalLayout = useAppStore(s => s.settings.pptxLayout);
   const [expandedSnapId, setExpandedSnapId] = useState<string | null>(null);
+
+  // Drag-and-drop state
+  const dragIndexRef = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = useCallback((index: number) => {
+    dragIndexRef.current = index;
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, toIndex: number) => {
+    e.preventDefault();
+    const fromIndex = dragIndexRef.current;
+    if (fromIndex !== null && fromIndex !== toIndex) {
+      reorderStep(fromIndex, toIndex);
+    }
+    dragIndexRef.current = null;
+    setDragOverIndex(null);
+  }, [reorderStep]);
+
+  const handleDragEnd = useCallback(() => {
+    dragIndexRef.current = null;
+    setDragOverIndex(null);
+  }, []);
+
+  // Hover highlight
+  const handleStepMouseEnter = useCallback((step: FlowStep) => {
+    if ('selector' in step && (step as { selector: string }).selector) {
+      browser.highlightElement((step as { selector: string }).selector);
+    }
+  }, []);
+
+  const handleStepMouseLeave = useCallback(() => {
+    browser.clearHighlight();
+  }, []);
 
   if (!flow) {
     return (
@@ -174,12 +216,20 @@ export function StepList({ onEditStep }: StepListProps) {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 12, scale: 0.95 }}
               transition={{ duration: 0.2, type: 'spring', stiffness: 300, damping: 25 }}
+              draggable
+              onDragStart={() => handleDragStart(index)}
+              onDragOver={(e) => handleDragOver(e as unknown as React.DragEvent, index)}
+              onDrop={(e) => handleDrop(e as unknown as React.DragEvent, index)}
+              onDragEnd={handleDragEnd}
+              onMouseEnter={() => handleStepMouseEnter(step)}
+              onMouseLeave={handleStepMouseLeave}
               className={cn(
                 'rounded-lg border-l-[3px] border border-ds-border/50 bg-ds-surface/50 overflow-hidden',
                 'transition-all duration-150',
                 isSelected && 'bg-ds-accent/5 border-ds-accent/30 border-l-ds-accent',
                 !isSelected && statusBorderColor(runResult?.status),
                 isCurrentlyRunning && 'ring-1 ring-ds-accent/40 bg-ds-accent/5',
+                dragOverIndex === index && dragIndexRef.current !== index && 'border-t-2 border-t-ds-accent',
               )}
             >
               {/* Main row */}
@@ -240,7 +290,7 @@ export function StepList({ onEditStep }: StepListProps) {
                       <X className="w-3 h-3" />
                     </Button>
                   </Tooltip>
-                  <GripVertical className="w-3 h-3 text-ds-text-dim/50 cursor-grab" />
+                  <GripVertical className="w-3 h-3 text-ds-text-dim/50 cursor-grab active:cursor-grabbing" />
                 </div>
               </div>
 

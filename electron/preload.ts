@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('dashsnap', {
   send: (channel: string, ...args: unknown[]) => {
     const allowedSend = [
       'browser:navigate', 'browser:back', 'browser:forward', 'browser:reload',
+      'browser:highlight-element', 'browser:clear-highlight',
       'recorder:start-click', 'recorder:start-snap', 'recorder:start-screenshot',
       'recorder:start-hover', 'recorder:start-select', 'recorder:start-type', 'recorder:start-scroll-element',
       'recorder:stop',

@@ -305,7 +305,7 @@ export class FlowRunner {
   }
 
   private async executeSelect(
-    step: { selector: string; fallbackXY?: [number, number]; selectorStrategy: string; optionValue: string },
+    step: { selector: string; fallbackXY?: [number, number]; selectorStrategy: string; optionValue: string; clickOffAfter?: boolean },
     waitSeconds: number,
   ): Promise<'success' | 'warning'> {
     const wc = this.view.webContents;
@@ -329,6 +329,9 @@ export class FlowRunner {
 
       if (found) {
         await this.delay(waitSeconds * 1000);
+        if (step.clickOffAfter !== false) {
+          await this.clickOff(wc);
+        }
         return 'success';
       }
     }
@@ -338,6 +341,9 @@ export class FlowRunner {
       wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
       wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
       await this.delay(waitSeconds * 1000);
+      if (step.clickOffAfter !== false) {
+        await this.clickOff(wc);
+      }
       return 'warning';
     }
 
@@ -345,7 +351,7 @@ export class FlowRunner {
   }
 
   private async executeType(
-    step: { selector: string; fallbackXY?: [number, number]; selectorStrategy: string; text: string; clearFirst?: boolean },
+    step: { selector: string; fallbackXY?: [number, number]; selectorStrategy: string; text: string; clearFirst?: boolean; clickOffAfter?: boolean },
     waitSeconds: number,
   ): Promise<'success' | 'warning'> {
     const wc = this.view.webContents;
@@ -364,12 +370,14 @@ export class FlowRunner {
       `).catch(() => false);
 
       if (found) {
-        // Type each character via input events for realistic typing
         for (const char of step.text) {
           wc.sendInputEvent({ type: 'char', keyCode: char });
           await this.delay(30);
         }
         await this.delay(waitSeconds * 1000);
+        if (step.clickOffAfter !== false) {
+          await this.clickOff(wc);
+        }
         return 'success';
       }
     }
@@ -384,6 +392,9 @@ export class FlowRunner {
         await this.delay(30);
       }
       await this.delay(waitSeconds * 1000);
+      if (step.clickOffAfter !== false) {
+        await this.clickOff(wc);
+      }
       return 'warning';
     }
 
@@ -415,6 +426,24 @@ export class FlowRunner {
     }
 
     throw new Error(`Element not found: ${step.selector}`);
+  }
+
+  private async clickOff(wc: Electron.WebContents): Promise<void> {
+    // Blur the active element, then click the body to trigger any apply/commit handlers
+    await wc.executeJavaScript(`
+      (function() {
+        const active = document.activeElement;
+        if (active && active !== document.body) {
+          active.blur();
+          active.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        // Click the body at a neutral spot to dismiss popups/dropdowns
+        document.body.click();
+        document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: 1, clientY: 1 }));
+        document.body.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: 1, clientY: 1 }));
+      })()
+    `).catch(() => {});
+    await this.delay(300);
   }
 
   private async waitForLoad(timeout: number): Promise<void> {

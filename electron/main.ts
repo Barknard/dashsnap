@@ -81,12 +81,12 @@ function showSplash() {
     width: 360,
     height: 400,
     frame: false,
-    transparent: true,
     resizable: false,
     alwaysOnTop: true,
     center: true,
     skipTaskbar: true,
-    backgroundColor: '#00000000',
+    show: true, // show immediately — don't wait for ready-to-show
+    backgroundColor: '#13111C', // solid bg so it paints instantly (no compositing delay)
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -217,14 +217,16 @@ function createWindow() {
   });
 }
 
+const URL_BAR_HEIGHT = 44; // px — matches the browser bar rendered in the React app
+
 function positionBrowserView() {
   if (!mainWindow || !browserView) return;
   const [width, height] = mainWindow.getContentSize();
   browserView.setBounds({
     x: sidebarWidth,
-    y: 0,
+    y: URL_BAR_HEIGHT,
     width: Math.max(0, width - sidebarWidth),
-    height,
+    height: Math.max(0, height - URL_BAR_HEIGHT),
   });
 }
 
@@ -237,6 +239,43 @@ function setupIPC() {
   ipcMain.on('browser:forward', () => browserManager?.forward());
   ipcMain.on('browser:reload', () => browserManager?.reload());
   ipcMain.handle('browser:get-url', () => browserManager?.getUrl() || '');
+
+  // Element highlight in BrowserView
+  ipcMain.on('browser:highlight-element', (_e, selector: string) => {
+    if (!browserView) return;
+    browserView.webContents.executeJavaScript(`
+      (function() {
+        let h = document.getElementById('__dashsnap_step_highlight');
+        if (!h) {
+          h = document.createElement('div');
+          h.id = '__dashsnap_step_highlight';
+          h.style.cssText = 'position:fixed;z-index:2147483645;border:2px solid #7C5CFC;background:rgba(124,92,252,0.12);border-radius:3px;pointer-events:none;transition:all 0.15s ease;';
+          document.body.appendChild(h);
+        }
+        const sel = '${selector.replace(/'/g, "\\'")}';
+        const el = sel ? document.querySelector(sel) : null;
+        if (el) {
+          const r = el.getBoundingClientRect();
+          h.style.display = 'block';
+          h.style.left = r.left + 'px';
+          h.style.top = r.top + 'px';
+          h.style.width = r.width + 'px';
+          h.style.height = r.height + 'px';
+        } else {
+          h.style.display = 'none';
+        }
+      })()
+    `).catch(() => {});
+  });
+  ipcMain.on('browser:clear-highlight', () => {
+    if (!browserView) return;
+    browserView.webContents.executeJavaScript(`
+      (function() {
+        const h = document.getElementById('__dashsnap_step_highlight');
+        if (h) h.style.display = 'none';
+      })()
+    `).catch(() => {});
+  });
 
   // Recorder
   ipcMain.on('recorder:start-click', () => recorder?.startClickRecording());
@@ -627,15 +666,17 @@ start "" "${currentExe}"
 
 // ─── App lifecycle ──────────────────────────────────────────────────────────
 
-app.whenReady().then(() => {
-  // Show splash immediately, then defer heavy work so the splash paints first
+// Show splash at the absolute earliest moment — before whenReady() resolves
+app.once('browser-window-created', () => {}); // no-op, just ensure event loop
+app.on('ready', () => {
   showSplash();
+});
 
-  setTimeout(() => {
-    setupIPC();
-    createWindow();
-    setupAutoUpdater();
-  }, 100);
+app.whenReady().then(() => {
+  // Heavy init — splash is already visible by now
+  setupIPC();
+  createWindow();
+  setupAutoUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

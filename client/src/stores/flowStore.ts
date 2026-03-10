@@ -29,6 +29,7 @@ interface FlowStore {
   updateStep: (stepId: string, updates: Partial<FlowStep>) => void;
   moveStepUp: (stepId: string) => void;
   moveStepDown: (stepId: string) => void;
+  reorderStep: (fromIndex: number, toIndex: number) => void;
   selectStep: (index: number | null) => void;
 
   // Defaults
@@ -226,6 +227,23 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
         f.id === flow.id ? { ...f, steps, updatedAt: new Date().toISOString() } : f
       ),
       selectedStepIndex: idx + 1,
+    }));
+    get().saveFlows();
+  },
+
+  reorderStep: (fromIndex: number, toIndex: number) => {
+    const flow = get().getActiveFlow();
+    if (!flow) return;
+    if (fromIndex === toIndex) return;
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= flow.steps.length || toIndex >= flow.steps.length) return;
+    const steps = [...flow.steps];
+    const [moved] = steps.splice(fromIndex, 1);
+    steps.splice(toIndex, 0, moved);
+    set(state => ({
+      flows: state.flows.map(f =>
+        f.id === flow.id ? { ...f, steps, updatedAt: new Date().toISOString() } : f
+      ),
+      selectedStepIndex: toIndex,
     }));
     get().saveFlows();
   },

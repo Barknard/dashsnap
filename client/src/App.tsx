@@ -122,6 +122,7 @@ export default function App() {
           selectorStrategy,
           fallbackXY: data.xy,
           optionValue: '',
+          clickOffAfter: true,
         } as SelectStep;
       } else if (currentRecordingType === 'type') {
         step = {
@@ -133,6 +134,7 @@ export default function App() {
           fallbackXY: data.xy,
           text: '',
           clearFirst: true,
+          clickOffAfter: true,
         } as TypeStep;
       } else if (currentRecordingType === 'scroll-element') {
         step = {
@@ -203,9 +205,13 @@ export default function App() {
 
   return (
     <TooltipProvider delayDuration={300}>
+      {/* Full-width URL bar above the BrowserView */}
+      <div className="fixed top-0 left-[var(--sidebar-w,380px)] right-0 h-[44px] z-30 bg-ds-bg border-b border-ds-border">
+        <UrlBar />
+      </div>
+
       <div className="flex flex-col h-screen w-[var(--sidebar-w,380px)] bg-ds-bg select-none overflow-hidden">
         <Header />
-        <UrlBar />
 
         {hasActiveFlow ? (
           <>

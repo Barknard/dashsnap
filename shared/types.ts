@@ -59,6 +59,7 @@ export interface SelectStep {
   fallbackXY?: [number, number];
   selectorStrategy: 'data-attr' | 'aria-label' | 'text' | 'css-combo' | 'xy-position';
   optionValue: string;
+  clickOffAfter?: boolean;
 }
 
 export interface TypeStep {
@@ -70,6 +71,7 @@ export interface TypeStep {
   selectorStrategy: 'data-attr' | 'aria-label' | 'text' | 'css-combo' | 'xy-position';
   text: string;
   clearFirst?: boolean;
+  clickOffAfter?: boolean;
 }
 
 export interface ScrollElementStep {
