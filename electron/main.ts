@@ -217,16 +217,14 @@ function createWindow() {
   });
 }
 
-const URL_BAR_HEIGHT = 44; // px — matches the browser bar rendered in the React app
-
 function positionBrowserView() {
   if (!mainWindow || !browserView) return;
   const [width, height] = mainWindow.getContentSize();
   browserView.setBounds({
     x: sidebarWidth,
-    y: URL_BAR_HEIGHT,
+    y: 0,
     width: Math.max(0, width - sidebarWidth),
-    height: Math.max(0, height - URL_BAR_HEIGHT),
+    height,
   });
 }
 
@@ -617,47 +615,41 @@ function applyPortableUpdate(downloadedExe: string) {
   // 2. Overwrites the current exe with the new one
   // 3. Relaunches the app
   // 4. Cleans up temp files and itself
-  const batchPath = path.join(app.getPath('temp'), 'dashsnap-update.cmd');
+  const tempDir = app.getPath('temp');
+  const batchPath = path.join(tempDir, 'dashsnap-update.cmd');
+  const vbsPath = path.join(tempDir, 'dashsnap-update.vbs');
   const pid = process.pid;
 
+  // Batch script does the actual work
   const script = `@echo off
-title DashSnap Updater
-echo Updating DashSnap...
-:: Wait for the current process to exit
 :waitloop
 tasklist /FI "PID eq ${pid}" 2>NUL | find /I "${pid}" >NUL
 if not errorlevel 1 (
   timeout /t 1 /nobreak >NUL
   goto waitloop
 )
-:: Small extra delay for file handle release
 timeout /t 1 /nobreak >NUL
-:: Replace the exe
 copy /Y "${downloadedExe}" "${currentExe}" >NUL
-if errorlevel 1 (
-  echo Update failed - could not replace exe.
-  echo You can manually copy:
-  echo   FROM: ${downloadedExe}
-  echo   TO:   ${currentExe}
-  pause
-  exit /b 1
-)
-:: Clean up the temp download
+if errorlevel 1 exit /b 1
 del /Q "${downloadedExe}" >NUL 2>&1
-:: Relaunch
 start "" "${currentExe}"
-:: Delete this script
+del /Q "${vbsPath.replace(/\\/g, '\\\\')}" >NUL 2>&1
 (goto) 2>NUL & del /Q "%~f0"
 `;
 
-  fs.writeFileSync(batchPath, script, 'utf-8');
+  // VBScript launcher runs the batch completely hidden (no terminal window)
+  const vbs = `Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run """${batchPath.replace(/\\/g, '\\\\')}""", 0, False
+`;
 
-  // Spawn the batch script detached so it survives our exit
+  fs.writeFileSync(batchPath, script, 'utf-8');
+  fs.writeFileSync(vbsPath, vbs, 'utf-8');
+
+  // Launch via wscript (completely invisible — no terminal at all)
   const { spawn } = require('child_process') as typeof import('child_process');
-  spawn('cmd.exe', ['/c', batchPath], {
+  spawn('wscript.exe', [vbsPath], {
     detached: true,
     stdio: 'ignore',
-    windowsHide: true,
   }).unref();
 
   // Quit the app so the batch script can replace the exe

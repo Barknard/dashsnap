@@ -98,7 +98,7 @@ export function UrlBar() {
   };
 
   return (
-    <div className="flex items-center gap-1.5 px-3 py-2 h-full">
+    <div className="flex items-center gap-1.5 px-3 py-2 border-b border-ds-border">
       <Tooltip content="Back">
         <Button variant="ghost" size="icon-sm" onClick={() => browser.back()}>
           <ChevronLeft className="w-4 h-4" />
