@@ -28,8 +28,15 @@ interface AppStore {
   // App info
   version: string;
   updateAvailable: string | null;
+  updateReleaseUrl: string | null;
+  updateStatus: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'up-to-date' | 'error';
+  updateProgress: number;
+  updateError: string | null;
   setVersion: (v: string) => void;
-  setUpdateAvailable: (v: string | null) => void;
+  setUpdateAvailable: (v: string | null, releaseUrl?: string) => void;
+  setUpdateStatus: (status: AppStore['updateStatus']) => void;
+  setUpdateProgress: (percent: number) => void;
+  setUpdateError: (err: string | null) => void;
 
   // UI
   activeTab: 'flows' | 'record' | 'run' | 'output';
@@ -91,8 +98,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // App info
   version: '1.0.0',
   updateAvailable: null,
+  updateReleaseUrl: null,
+  updateStatus: 'idle',
+  updateProgress: 0,
+  updateError: null,
   setVersion: (v) => set({ version: v }),
-  setUpdateAvailable: (v) => set({ updateAvailable: v }),
+  setUpdateAvailable: (v, releaseUrl) => set({ updateAvailable: v, updateReleaseUrl: releaseUrl || null, updateStatus: 'available' }),
+  setUpdateStatus: (status) => set({ updateStatus: status }),
+  setUpdateProgress: (percent) => set({ updateProgress: percent, updateStatus: 'downloading' }),
+  setUpdateError: (err) => set({ updateError: err, updateStatus: 'error' }),
 
   // UI
   activeTab: 'flows',

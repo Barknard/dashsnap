@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld('dashsnap', {
       'browser:navigate', 'browser:back', 'browser:forward', 'browser:reload',
       'recorder:start-click', 'recorder:start-snap', 'recorder:stop',
       'flow:run', 'flow:run-step', 'flow:stop',
-      'app:check-update',
+      'app:check-update', 'app:install-update',
       'sidebar:resize',
     ];
     if (allowedSend.includes(channel)) {
@@ -33,7 +33,8 @@ contextBridge.exposeInMainWorld('dashsnap', {
       'browser:url-changed', 'browser:title-changed', 'browser:loading',
       'recorder:element-picked', 'recorder:region-selected', 'recorder:cancelled',
       'flow:progress',
-      'app:update-available', 'app:update-downloaded',
+      'app:update-checking', 'app:update-available', 'app:update-not-available',
+      'app:update-download-progress', 'app:update-downloaded', 'app:update-error',
     ];
     if (allowedOn.includes(channel)) {
       const handler = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => callback(...args);

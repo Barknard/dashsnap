@@ -2,7 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as Switch from '@radix-ui/react-switch';
 import {
   Settings, FolderOpen, FileText, Globe, Lightbulb,
-  RefreshCw, X, Heart,
+  RefreshCw, X, Heart, Download, CheckCircle, AlertCircle, ExternalLink, Loader2,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -15,6 +15,11 @@ export function SettingsDialog() {
   const currentSettings = useAppStore(s => s.settings);
   const saveSettings = useAppStore(s => s.saveSettings);
   const version = useAppStore(s => s.version);
+  const updateStatus = useAppStore(s => s.updateStatus);
+  const updateAvailable = useAppStore(s => s.updateAvailable);
+  const updateReleaseUrl = useAppStore(s => s.updateReleaseUrl);
+  const updateProgress = useAppStore(s => s.updateProgress);
+  const updateError = useAppStore(s => s.updateError);
 
   const handleBrowseFolder = async (field: 'browserProfilePath' | 'outputPath') => {
     const path = await settingsIpc.browseFolder();
@@ -154,15 +159,97 @@ export function SettingsDialog() {
             <div className="border-t border-ds-border" />
 
             {/* Update check */}
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => appIpc.checkUpdate()}
-            >
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-              Check for Updates
-            </Button>
+            <div className="space-y-2">
+              {updateStatus === 'checking' && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-ds-accent/10 border border-ds-accent/20">
+                  <Loader2 className="w-3.5 h-3.5 text-ds-accent animate-spin" />
+                  <span className="text-xs text-ds-text">Checking for updates...</span>
+                </div>
+              )}
+
+              {updateStatus === 'up-to-date' && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-ds-emerald/10 border border-ds-emerald/20">
+                  <CheckCircle className="w-3.5 h-3.5 text-ds-emerald" />
+                  <span className="text-xs text-ds-text">You're up to date!</span>
+                </div>
+              )}
+
+              {updateStatus === 'available' && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-ds-amber/10 border border-ds-amber/20">
+                    <Download className="w-3.5 h-3.5 text-ds-amber" />
+                    <span className="text-xs text-ds-text">
+                      Update v{updateAvailable} available!
+                    </span>
+                  </div>
+                  {updateReleaseUrl ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => appIpc.openExternal(updateReleaseUrl)}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                      Download from GitHub
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-ds-text-dim">Downloading automatically...</span>
+                  )}
+                </div>
+              )}
+
+              {updateStatus === 'downloading' && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-ds-accent/10 border border-ds-accent/20">
+                    <Loader2 className="w-3.5 h-3.5 text-ds-accent animate-spin" />
+                    <span className="text-xs text-ds-text">Downloading update... {updateProgress}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-ds-bg rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-ds-accent rounded-full transition-all duration-300"
+                      style={{ width: `${updateProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {updateStatus === 'downloaded' && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-ds-emerald/10 border border-ds-emerald/20">
+                    <CheckCircle className="w-3.5 h-3.5 text-ds-emerald" />
+                    <span className="text-xs text-ds-text">Update downloaded! Restart to install.</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={() => appIpc.installUpdate()}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                    Restart & Install
+                  </Button>
+                </div>
+              )}
+
+              {updateStatus === 'error' && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-ds-red/10 border border-ds-red/20">
+                  <AlertCircle className="w-3.5 h-3.5 text-ds-red" />
+                  <span className="text-xs text-ds-text truncate" title={updateError || ''}>
+                    Update check failed
+                  </span>
+                </div>
+              )}
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => appIpc.checkUpdate()}
+                disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${updateStatus === 'checking' ? 'animate-spin' : ''}`} />
+                Check for Updates
+              </Button>
+            </div>
 
             {/* Reset */}
             <Button

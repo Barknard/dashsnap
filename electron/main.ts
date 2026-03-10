@@ -18,6 +18,7 @@ import { PptxBuilder } from './pptx-builder';
 
 // ─── Globals ────────────────────────────────────────────────────────────────
 
+let splashWindow: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
 let browserView: BrowserView | null = null;
 let configManager: ConfigManager;
@@ -60,6 +61,41 @@ function getAppDataPath(): string {
 function ensureDir(dirPath: string) {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
+  }
+}
+
+// ─── Splash screen ──────────────────────────────────────────────────────────
+
+function showSplash() {
+  splashWindow = new BrowserWindow({
+    width: 360,
+    height: 400,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    alwaysOnTop: true,
+    center: true,
+    skipTaskbar: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+
+  if (isDev) {
+    splashWindow.loadFile(path.join(path.dirname(__dirname), 'client', 'splash.html'));
+  } else {
+    splashWindow.loadFile(path.join(__dirname, '../dist/splash.html'));
+  }
+
+  splashWindow.once('closed', () => { splashWindow = null; });
+}
+
+function closeSplash() {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.close();
+    splashWindow = null;
   }
 }
 
@@ -144,6 +180,8 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow!.show();
+    // Close splash after a short delay so the main window is fully painted
+    setTimeout(closeSplash, 500);
   });
 
   // ─── Window events ────────────────────────────────────────────────────
@@ -263,7 +301,21 @@ function setupIPC() {
 
   // App
   ipcMain.handle('app:get-version', () => app.getVersion());
-  ipcMain.on('app:check-update', () => autoUpdater.checkForUpdates());
+  ipcMain.on('app:check-update', () => {
+    mainWindow?.webContents.send('app:update-checking');
+    if (app.isPackaged) {
+      autoUpdater.checkForUpdates().catch(() => {
+        // electron-updater failed (portable build) — try GitHub API
+        checkGitHubRelease();
+      });
+    } else {
+      // Dev mode — just check GitHub
+      checkGitHubRelease();
+    }
+  });
+  ipcMain.on('app:install-update', () => {
+    autoUpdater.quitAndInstall(false, true);
+  });
   ipcMain.handle('app:open-path', (_e, filePath: string) => {
     if (filePath) {
       shell.openPath(filePath);
@@ -320,8 +372,20 @@ function setupAutoUpdater() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
+  autoUpdater.on('checking-for-update', () => {
+    mainWindow?.webContents.send('app:update-checking');
+  });
+
   autoUpdater.on('update-available', (info) => {
     mainWindow?.webContents.send('app:update-available', info.version);
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    mainWindow?.webContents.send('app:update-not-available');
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('app:update-download-progress', Math.round(progress.percent));
   });
 
   autoUpdater.on('update-downloaded', () => {
@@ -356,19 +420,29 @@ async function checkGitHubRelease() {
           const release = JSON.parse(data);
           const latest = (release.tag_name || '').replace(/^v/, '');
           const current = app.getVersion();
+          const releaseUrl = release.html_url || 'https://github.com/Barknard/dashsnap/releases/latest';
           if (latest && latest !== current) {
-            mainWindow?.webContents.send('app:update-available', latest);
+            mainWindow?.webContents.send('app:update-available', latest, releaseUrl);
+          } else {
+            mainWindow?.webContents.send('app:update-not-available');
           }
-        } catch { /* ignore parse errors */ }
+        } catch {
+          mainWindow?.webContents.send('app:update-error', 'Failed to parse release info');
+        }
       });
     });
-    req.on('error', () => { /* silently fail */ });
-  } catch { /* silently fail */ }
+    req.on('error', (err) => {
+      mainWindow?.webContents.send('app:update-error', String(err.message || err));
+    });
+  } catch (err) {
+    mainWindow?.webContents.send('app:update-error', String(err));
+  }
 }
 
 // ─── App lifecycle ──────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
+  showSplash();
   setupIPC();
   createWindow();
   setupAutoUpdater();

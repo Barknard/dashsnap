@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -60,49 +60,68 @@ export default function App() {
     setNameInput('');
   };
 
+  const setUpdateStatus = useAppStore(s => s.setUpdateStatus);
+  const setUpdateProgress = useAppStore(s => s.setUpdateProgress);
+  const setUpdateError = useAppStore(s => s.setUpdateError);
+
   // Initialize
   useEffect(() => {
     loadFlows();
     loadSettings();
     appIpc.getVersion().then(setVersion);
 
-    appIpc.onUpdateAvailable((v: string) => {
-      setUpdateAvailable(v);
-      toast.info(`Update ${v} available — will install on next restart.`);
+    appIpc.onUpdateChecking(() => {
+      setUpdateStatus('checking');
+    });
+    appIpc.onUpdateAvailable((v: string, releaseUrl?: string) => {
+      setUpdateAvailable(v, releaseUrl);
+      toast.info(`Update v${v} available!`);
+    });
+    appIpc.onUpdateNotAvailable(() => {
+      setUpdateStatus('up-to-date');
+    });
+    appIpc.onUpdateDownloadProgress((percent: number) => {
+      setUpdateProgress(percent);
     });
     appIpc.onUpdateDownloaded(() => {
+      setUpdateStatus('downloaded');
       toast.success('Update downloaded — restart to apply.');
     });
-  }, [loadFlows, loadSettings, setVersion, setUpdateAvailable]);
+    appIpc.onUpdateError((message: string) => {
+      setUpdateError(message);
+    });
+  }, [loadFlows, loadSettings, setVersion, setUpdateAvailable, setUpdateStatus, setUpdateProgress, setUpdateError]);
 
   // Listen for recorded elements
   useEffect(() => {
-    const handleElementPicked = (data: { selector: string; label: string; strategy: string; xy: [number, number] }) => {
+    const handleElementPicked = (data: { selector: string; label: string; strategy: string; xy: [number, number]; rect?: { x: number; y: number; width: number; height: number } }) => {
+      // Capture recordingType BEFORE stopRecording clears it
+      const currentRecordingType = useAppStore.getState().recordingType;
       stopRecording();
-      const step: ClickStep = {
-        type: 'CLICK',
-        id: generateId('step'),
-        label: data.label || 'Click element',
-        selector: data.selector,
-        selectorStrategy: data.strategy as ClickStep['selectorStrategy'],
-        fallbackXY: data.xy,
-      };
 
-      setNameInput(step.label);
-      setNamePrompt({ open: true, defaultName: step.label, step });
-    };
-
-    const handleRegionSelected = (data: { x: number; y: number; width: number; height: number; preview?: string }) => {
-      stopRecording();
-      const step: SnapStep = {
-        type: 'SNAP',
-        id: generateId('step'),
-        label: 'Screenshot',
-        region: { x: data.x, y: data.y, width: data.width, height: data.height },
-      };
-
-      setNameInput(step.label);
-      setNamePrompt({ open: true, defaultName: step.label, step });
+      if (currentRecordingType === 'snap' && data.rect) {
+        // Element-based screenshot: use the element's bounding rect
+        const step: SnapStep = {
+          type: 'SNAP',
+          id: generateId('step'),
+          label: data.label || 'Screenshot',
+          region: data.rect,
+        };
+        setNameInput(step.label);
+        setNamePrompt({ open: true, defaultName: step.label, step });
+      } else {
+        // Click step
+        const step: ClickStep = {
+          type: 'CLICK',
+          id: generateId('step'),
+          label: data.label || 'Click element',
+          selector: data.selector,
+          selectorStrategy: data.strategy as ClickStep['selectorStrategy'],
+          fallbackXY: data.xy,
+        };
+        setNameInput(step.label);
+        setNamePrompt({ open: true, defaultName: step.label, step });
+      }
     };
 
     const handleCancelled = () => {
@@ -111,12 +130,10 @@ export default function App() {
     };
 
     recorder.onElementPicked(handleElementPicked);
-    recorder.onRegionSelected(handleRegionSelected);
     recorder.onCancelled(handleCancelled);
 
     return () => {
       recorder.offElementPicked(handleElementPicked as (...args: unknown[]) => void);
-      recorder.offRegionSelected(handleRegionSelected as (...args: unknown[]) => void);
     };
   }, [addStep, stopRecording, setActiveTab]);
 

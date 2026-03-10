@@ -146,6 +146,7 @@ const CLICK_OVERLAY_JS = `
       label: label,
       strategy: strategy,
       xy: [Math.round(rect.left + rect.width/2), Math.round(rect.top + rect.height/2)],
+      rect: { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
     };
   }
 
@@ -308,8 +309,10 @@ export class Recorder {
 
   async startSnapRecording() {
     this.stopPolling();
-    await this.view.webContents.executeJavaScript(SNAP_OVERLAY_JS);
-    this.pollForSnapResult();
+    // Use the same element-picker overlay as click recording
+    // The renderer will create a SNAP step using the element's bounding rect
+    await this.view.webContents.executeJavaScript(CLICK_OVERLAY_JS);
+    this.pollForClickResult();
   }
 
   stop() {

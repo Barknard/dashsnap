@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MousePointer2, Scissors, X } from 'lucide-react';
+import { MousePointer2, Camera, X } from 'lucide-react';
 import { Button } from './ui/Button';
 import { useAppStore } from '@/stores/appStore';
 import { recorder } from '@/lib/ipc';
@@ -23,11 +23,11 @@ export function RecordingOverlay({ type }: RecordingOverlayProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [stopRecording]);
 
-  const Icon = type === 'click' ? MousePointer2 : Scissors;
+  const Icon = type === 'click' ? MousePointer2 : Camera;
   const color = type === 'click' ? 'ds-accent' : 'ds-emerald';
   const message = type === 'click'
     ? 'Click any element in the browser'
-    : 'Draw a rectangle over the area to capture';
+    : 'Select an element to screenshot';
 
   return (
     <motion.div

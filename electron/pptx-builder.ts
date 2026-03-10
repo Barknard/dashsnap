@@ -1,6 +1,7 @@
 import PptxGenJS from 'pptxgenjs';
 import path from 'path';
 import fs from 'fs';
+import { nativeImage } from 'electron';
 import { ConfigManager } from './config-manager';
 
 export class PptxBuilder {
@@ -60,16 +61,44 @@ export class PptxBuilder {
         bold: true,
       });
 
-      // Screenshot image — fill content area
+      // Screenshot image — preserve original aspect ratio, centered in content area
       if (fs.existsSync(screenshot.path)) {
-        const imageData = fs.readFileSync(screenshot.path).toString('base64');
+        const imageBuffer = fs.readFileSync(screenshot.path);
+        const imageData = imageBuffer.toString('base64');
+
+        // Get actual image dimensions using Electron's nativeImage
+        const img = nativeImage.createFromBuffer(imageBuffer);
+        const imgSize = img.getSize(); // { width, height } in pixels
+
+        // Available content area on slide (inches)
+        const maxW = 12.7;
+        const maxH = 6.2;
+        const contentX = 0.3;
+        const contentY = 0.8;
+
+        // Convert pixel dimensions to inches at 96 DPI
+        let imgW = imgSize.width / 96;
+        let imgH = imgSize.height / 96;
+
+        // Scale down to fit within the content area while preserving ratio
+        if (imgW > maxW || imgH > maxH) {
+          const scaleW = maxW / imgW;
+          const scaleH = maxH / imgH;
+          const scale = Math.min(scaleW, scaleH);
+          imgW *= scale;
+          imgH *= scale;
+        }
+
+        // Center in the content area
+        const x = contentX + (maxW - imgW) / 2;
+        const y = contentY + (maxH - imgH) / 2;
+
         slide.addImage({
           data: `image/png;base64,${imageData}`,
-          x: 0.3,
-          y: 0.8,
-          w: 12.7,
-          h: 6.2,
-          sizing: { type: 'contain', w: 12.7, h: 6.2 },
+          x,
+          y,
+          w: imgW,
+          h: imgH,
         });
       }
 

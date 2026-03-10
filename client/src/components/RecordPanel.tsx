@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  MousePointer2, Scissors, Timer, Globe, ArrowDownToLine,
+  MousePointer2, Camera, Timer, Globe, ArrowDownToLine,
   Plus,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Card } from './ui/Card';
-import { RotatingTip } from './OnboardingTips';
 import { RecordingOverlay } from './RecordingOverlay';
+import { StepList } from './StepList';
 import { useFlowStore } from '@/stores/flowStore';
 import { useAppStore } from '@/stores/appStore';
 import { recorder } from '@/lib/ipc';
@@ -95,7 +95,7 @@ export function RecordPanel() {
         >
           <span className="w-2 h-2 rounded-full bg-ds-red animate-pulse-recording" />
           <span className="text-xs font-medium text-ds-red">
-            Recording {recordingType === 'click' ? 'click' : 'region'}... interact with the browser
+            Recording {recordingType === 'click' ? 'click' : 'screenshot'}... select an element in the browser
           </span>
         </motion.div>
       )}
@@ -129,11 +129,11 @@ export function RecordPanel() {
               className="w-full flex flex-col items-center gap-2 p-4 rounded-xl bg-gradient-to-br from-ds-emerald/20 to-ds-emerald/5 border border-ds-emerald/25 hover:border-ds-emerald/50 hover:from-ds-emerald/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
             >
               <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-ds-emerald/20 group-hover:bg-ds-emerald/30 transition-colors">
-                <Scissors className="w-5 h-5 text-ds-emerald" />
+                <Camera className="w-5 h-5 text-ds-emerald" />
               </div>
               <div className="text-center">
-                <p className="text-xs font-semibold text-ds-text">Capture Region</p>
-                <p className="text-xs text-ds-text-dim mt-0.5">Draw screenshot area</p>
+                <p className="text-xs font-semibold text-ds-text">Capture Element</p>
+                <p className="text-xs text-ds-text-dim mt-0.5">Select element to screenshot</p>
               </div>
             </button>
           </motion.div>
@@ -237,10 +237,15 @@ export function RecordPanel() {
         </div>
       </Card>
 
-      {/* Tips */}
-      <div className="mt-auto pt-3">
-        <RotatingTip />
-      </div>
+      {/* Flow steps */}
+      {activeFlow && activeFlow.steps.length > 0 && (
+        <div className="border-t border-ds-border pt-2">
+          <h3 className="text-sm font-semibold text-ds-text-dim uppercase tracking-wider mb-1 px-1">
+            Flow Steps ({activeFlow.steps.length})
+          </h3>
+          <StepList onEditStep={() => {}} />
+        </div>
+      )}
 
       {noFlow && (
         <div className="text-center py-2">

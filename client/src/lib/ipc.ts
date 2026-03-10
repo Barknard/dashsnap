@@ -187,13 +187,33 @@ export const app = {
     if (!isElectron) return;
     window.dashsnap!.send('app:check-update');
   },
-  onUpdateAvailable: (cb: (version: string) => void) => {
+  installUpdate: () => {
+    if (!isElectron) return;
+    window.dashsnap!.send('app:install-update');
+  },
+  onUpdateChecking: (cb: () => void) => {
+    if (!isElectron) return;
+    window.dashsnap!.on('app:update-checking', cb as (...args: unknown[]) => void);
+  },
+  onUpdateAvailable: (cb: (version: string, releaseUrl?: string) => void) => {
     if (!isElectron) return;
     window.dashsnap!.on('app:update-available', cb as (...args: unknown[]) => void);
+  },
+  onUpdateNotAvailable: (cb: () => void) => {
+    if (!isElectron) return;
+    window.dashsnap!.on('app:update-not-available', cb as (...args: unknown[]) => void);
+  },
+  onUpdateDownloadProgress: (cb: (percent: number) => void) => {
+    if (!isElectron) return;
+    window.dashsnap!.on('app:update-download-progress', cb as (...args: unknown[]) => void);
   },
   onUpdateDownloaded: (cb: () => void) => {
     if (!isElectron) return;
     window.dashsnap!.on('app:update-downloaded', cb as (...args: unknown[]) => void);
+  },
+  onUpdateError: (cb: (message: string) => void) => {
+    if (!isElectron) return;
+    window.dashsnap!.on('app:update-error', cb as (...args: unknown[]) => void);
   },
   listOutputs: async (): Promise<Array<{ name: string; path: string; size: number; modified: number; type: string; dataUrl: string | null }>> => {
     if (!isElectron) return [];
