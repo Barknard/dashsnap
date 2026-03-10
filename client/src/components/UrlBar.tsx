@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronLeft, ChevronRight, RotateCw, Globe, Star, Trash2, Bookmark as BookmarkIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RotateCw, Globe, Star, Trash2, Pencil, Check, Bookmark as BookmarkIcon } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
 import { browser } from '@/lib/ipc';
@@ -19,6 +19,8 @@ export function UrlBar() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const bookmarks: Bookmark[] = settings.bookmarks || [];
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
 
   useEffect(() => {
     if (!isFocused) {
@@ -81,6 +83,20 @@ export function UrlBar() {
     browser.navigate(url);
   };
 
+  const startEditing = (index: number) => {
+    setEditingIndex(index);
+    setEditName(bookmarks[index].name);
+  };
+
+  const saveEdit = () => {
+    if (editingIndex === null) return;
+    const updated = bookmarks.map((b, i) =>
+      i === editingIndex ? { ...b, name: editName.trim() || b.name } : b
+    );
+    saveSettings({ bookmarks: updated });
+    setEditingIndex(null);
+  };
+
   return (
     <div className="flex items-center gap-1.5 px-3 py-2 border-b border-ds-border">
       <Tooltip content="Back">
@@ -136,18 +152,16 @@ export function UrlBar() {
       </Tooltip>
 
       {/* Bookmarks picker dropdown */}
-      <DropdownMenu.Root>
+      <DropdownMenu.Root onOpenChange={(open) => { if (!open) setEditingIndex(null); }}>
         <DropdownMenu.Trigger asChild>
-          <Tooltip content="Bookmarks">
-            <Button variant="ghost" size="icon-sm" className="relative">
-              <BookmarkIcon className="w-3.5 h-3.5" />
-              {bookmarks.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-ds-accent text-[9px] font-bold text-white leading-none px-0.5">
-                  {bookmarks.length}
-                </span>
-              )}
-            </Button>
-          </Tooltip>
+          <Button variant="ghost" size="icon-sm" className="relative" title="Bookmarks">
+            <BookmarkIcon className="w-3.5 h-3.5" />
+            {bookmarks.length > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-ds-accent text-[9px] font-bold text-white leading-none px-0.5">
+                {bookmarks.length}
+              </span>
+            )}
+          </Button>
         </DropdownMenu.Trigger>
 
         <DropdownMenu.Portal>
@@ -167,23 +181,50 @@ export function UrlBar() {
               </div>
             ) : (
               bookmarks.map((bm, i) => (
-                <DropdownMenu.Item
-                  key={i}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-surface-hover outline-none group"
-                  onClick={() => goToBookmark(bm.url)}
-                >
-                  <Globe className="w-3 h-3 text-ds-text-dim shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{bm.name}</p>
-                    <p className="text-[10px] text-ds-text-dim truncate">{bm.url}</p>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); removeBookmark(bm.url); }}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-ds-red/10 hover:text-ds-red transition-all"
+                editingIndex === i ? (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-md"
+                    onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditingIndex(null); }}
                   >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </DropdownMenu.Item>
+                    <input
+                      autoFocus
+                      value={editName}
+                      onChange={e => setEditName(e.target.value)}
+                      className="flex-1 h-6 px-1.5 text-xs bg-ds-bg border border-ds-border rounded text-ds-text outline-none focus:border-ds-accent"
+                    />
+                    <button
+                      onClick={saveEdit}
+                      className="p-0.5 rounded hover:bg-ds-emerald/10 text-ds-emerald"
+                    >
+                      <Check className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <DropdownMenu.Item
+                    key={i}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-surface-hover outline-none group"
+                    onSelect={() => goToBookmark(bm.url)}
+                  >
+                    <Globe className="w-3 h-3 text-ds-text-dim shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{bm.name}</p>
+                      <p className="text-[10px] text-ds-text-dim truncate">{bm.url}</p>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); startEditing(i); }}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-ds-accent/10 hover:text-ds-accent transition-all"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); removeBookmark(bm.url); }}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-ds-red/10 hover:text-ds-red transition-all"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </DropdownMenu.Item>
+                )
               ))
             )}
           </DropdownMenu.Content>
