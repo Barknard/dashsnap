@@ -20,6 +20,7 @@ export function SettingsDialog() {
   const updateReleaseUrl = useAppStore(s => s.updateReleaseUrl);
   const updateProgress = useAppStore(s => s.updateProgress);
   const updateError = useAppStore(s => s.updateError);
+  const updateDownloadPath = useAppStore(s => s.updateDownloadPath);
 
   const handleBrowseFolder = async (field: 'browserProfilePath' | 'outputPath') => {
     const path = await settingsIpc.browseFolder();
@@ -182,18 +183,24 @@ export function SettingsDialog() {
                       Update v{updateAvailable} available!
                     </span>
                   </div>
-                  {updateReleaseUrl ? (
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={() => appIpc.downloadUpdate()}
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1.5" />
+                    Download Update
+                  </Button>
+                  {updateReleaseUrl && (
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
-                      className="w-full"
+                      className="w-full text-ds-text-dim"
                       onClick={() => appIpc.openExternal(updateReleaseUrl)}
                     >
                       <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-                      Download from GitHub
+                      View on GitHub
                     </Button>
-                  ) : (
-                    <span className="text-xs text-ds-text-dim">Downloading automatically...</span>
                   )}
                 </div>
               )}
@@ -227,6 +234,29 @@ export function SettingsDialog() {
                     <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
                     Restart & Install
                   </Button>
+                </div>
+              )}
+
+              {updateStatus === 'download-complete' && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-ds-emerald/10 border border-ds-emerald/20">
+                    <CheckCircle className="w-3.5 h-3.5 text-ds-emerald" />
+                    <span className="text-xs text-ds-text">Update saved to Downloads!</span>
+                  </div>
+                  {updateDownloadPath && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => appIpc.openPath(updateDownloadPath)}
+                    >
+                      <FolderOpen className="w-3.5 h-3.5 mr-1.5" />
+                      Open Downloads
+                    </Button>
+                  )}
+                  <p className="text-xs text-ds-text-dim text-center">
+                    Close this app and run the new version.
+                  </p>
                 </div>
               )}
 

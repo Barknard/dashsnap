@@ -191,6 +191,10 @@ export const app = {
     if (!isElectron) return;
     window.dashsnap!.send('app:install-update');
   },
+  downloadUpdate: () => {
+    if (!isElectron) return;
+    window.dashsnap!.send('app:download-update');
+  },
   onUpdateChecking: (cb: () => void) => {
     if (!isElectron) return;
     window.dashsnap!.on('app:update-checking', cb as (...args: unknown[]) => void);
@@ -210,6 +214,10 @@ export const app = {
   onUpdateDownloaded: (cb: () => void) => {
     if (!isElectron) return;
     window.dashsnap!.on('app:update-downloaded', cb as (...args: unknown[]) => void);
+  },
+  onUpdateDownloadComplete: (cb: (filePath: string) => void) => {
+    if (!isElectron) return;
+    window.dashsnap!.on('app:update-download-complete', cb as (...args: unknown[]) => void);
   },
   onUpdateError: (cb: (message: string) => void) => {
     if (!isElectron) return;

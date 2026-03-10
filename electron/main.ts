@@ -316,6 +316,9 @@ function setupIPC() {
   ipcMain.on('app:install-update', () => {
     autoUpdater.quitAndInstall(false, true);
   });
+  ipcMain.on('app:download-update', () => {
+    downloadGitHubUpdate();
+  });
   ipcMain.handle('app:open-path', (_e, filePath: string) => {
     if (filePath) {
       shell.openPath(filePath);
@@ -404,6 +407,10 @@ function setupAutoUpdater() {
   });
 }
 
+// Store the download URL for the portable exe from the latest release
+let pendingDownloadUrl: string | null = null;
+let pendingDownloadFilename: string | null = null;
+
 async function checkGitHubRelease() {
   try {
     const https = await import('https');
@@ -421,6 +428,25 @@ async function checkGitHubRelease() {
           const latest = (release.tag_name || '').replace(/^v/, '');
           const current = app.getVersion();
           const releaseUrl = release.html_url || 'https://github.com/Barknard/dashsnap/releases/latest';
+
+          // Find the portable exe or installer in assets
+          const assets = release.assets || [];
+          const portableAsset = assets.find((a: { name: string }) =>
+            /portable/i.test(a.name) && a.name.endsWith('.exe')
+          ) || assets.find((a: { name: string }) =>
+            /setup/i.test(a.name) && a.name.endsWith('.exe')
+          ) || assets.find((a: { name: string }) =>
+            a.name.endsWith('.exe')
+          );
+
+          if (portableAsset) {
+            pendingDownloadUrl = portableAsset.browser_download_url;
+            pendingDownloadFilename = portableAsset.name;
+          } else {
+            pendingDownloadUrl = null;
+            pendingDownloadFilename = null;
+          }
+
           if (latest && latest !== current) {
             mainWindow?.webContents.send('app:update-available', latest, releaseUrl);
           } else {
@@ -436,6 +462,68 @@ async function checkGitHubRelease() {
     });
   } catch (err) {
     mainWindow?.webContents.send('app:update-error', String(err));
+  }
+}
+
+async function downloadGitHubUpdate() {
+  if (!pendingDownloadUrl || !pendingDownloadFilename) {
+    mainWindow?.webContents.send('app:update-error', 'No download URL available');
+    return;
+  }
+
+  const downloadDir = app.getPath('downloads');
+  const savePath = path.join(downloadDir, pendingDownloadFilename);
+
+  mainWindow?.webContents.send('app:update-download-progress', 0);
+
+  try {
+    const https = await import('https');
+
+    const download = (url: string) => {
+      https.get(url, {
+        headers: { 'User-Agent': 'DashSnap/' + app.getVersion() },
+      }, (res) => {
+        // Follow redirects (GitHub uses 302)
+        if (res.statusCode === 301 || res.statusCode === 302) {
+          const redirectUrl = res.headers.location;
+          if (redirectUrl) {
+            download(redirectUrl);
+            return;
+          }
+        }
+
+        const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
+        let receivedBytes = 0;
+        const fileStream = fs.createWriteStream(savePath);
+
+        res.on('data', (chunk: Buffer) => {
+          receivedBytes += chunk.length;
+          fileStream.write(chunk);
+          if (totalBytes > 0) {
+            const percent = Math.round((receivedBytes / totalBytes) * 100);
+            mainWindow?.webContents.send('app:update-download-progress', percent);
+          }
+        });
+
+        res.on('end', () => {
+          fileStream.end();
+          mainWindow?.webContents.send('app:update-download-complete', savePath);
+          // Open the Downloads folder with the file selected
+          shell.showItemInFolder(savePath);
+        });
+
+        res.on('error', (err) => {
+          fileStream.end();
+          mainWindow?.webContents.send('app:update-error', `Download failed: ${err.message}`);
+        });
+      }).on('error', (err) => {
+        mainWindow?.webContents.send('app:update-error', `Download failed: ${err.message}`);
+      });
+    };
+
+    download(pendingDownloadUrl);
+  } catch (err) {
+    mainWindow?.webContents.send('app:update-error', `Download failed: ${err}`);
   }
 }
 

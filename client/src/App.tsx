@@ -32,6 +32,7 @@ export default function App() {
   const setUpdateStatus = useAppStore(s => s.setUpdateStatus);
   const setUpdateProgress = useAppStore(s => s.setUpdateProgress);
   const setUpdateError = useAppStore(s => s.setUpdateError);
+  const setUpdateDownloadComplete = useAppStore(s => s.setUpdateDownloadComplete);
 
   const loadFlows = useFlowStore(s => s.loadFlows);
   const addStep = useFlowStore(s => s.addStep);
@@ -79,8 +80,12 @@ export default function App() {
       setUpdateStatus('downloaded');
       toast.success('Update downloaded — restart to apply.');
     });
+    appIpc.onUpdateDownloadComplete((filePath: string) => {
+      setUpdateDownloadComplete(filePath);
+      toast.success('Update downloaded to Downloads folder!');
+    });
     appIpc.onUpdateError((message: string) => setUpdateError(message));
-  }, [loadFlows, loadSettings, setVersion, setUpdateAvailable, setUpdateStatus, setUpdateProgress, setUpdateError]);
+  }, [loadFlows, loadSettings, setVersion, setUpdateAvailable, setUpdateStatus, setUpdateProgress, setUpdateError, setUpdateDownloadComplete]);
 
   // Listen for recorded elements
   useEffect(() => {

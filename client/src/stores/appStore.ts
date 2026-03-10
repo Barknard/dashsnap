@@ -29,14 +29,16 @@ interface AppStore {
   version: string;
   updateAvailable: string | null;
   updateReleaseUrl: string | null;
-  updateStatus: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'up-to-date' | 'error';
+  updateStatus: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'download-complete' | 'up-to-date' | 'error';
   updateProgress: number;
   updateError: string | null;
+  updateDownloadPath: string | null;
   setVersion: (v: string) => void;
   setUpdateAvailable: (v: string | null, releaseUrl?: string) => void;
   setUpdateStatus: (status: AppStore['updateStatus']) => void;
   setUpdateProgress: (percent: number) => void;
   setUpdateError: (err: string | null) => void;
+  setUpdateDownloadComplete: (filePath: string) => void;
 
   // UI
   activeTab: 'record' | 'run' | 'output';
@@ -102,11 +104,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
   updateStatus: 'idle',
   updateProgress: 0,
   updateError: null,
+  updateDownloadPath: null,
   setVersion: (v) => set({ version: v }),
   setUpdateAvailable: (v, releaseUrl) => set({ updateAvailable: v, updateReleaseUrl: releaseUrl || null, updateStatus: 'available' }),
   setUpdateStatus: (status) => set({ updateStatus: status }),
   setUpdateProgress: (percent) => set({ updateProgress: percent, updateStatus: 'downloading' }),
   setUpdateError: (err) => set({ updateError: err, updateStatus: 'error' }),
+  setUpdateDownloadComplete: (filePath) => set({ updateStatus: 'download-complete', updateDownloadPath: filePath }),
 
   // UI
   activeTab: 'record',
