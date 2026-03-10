@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Layers, CircleDot, Play, Tag, Images } from 'lucide-react';
+import { CircleDot, Play, Tag, Images } from 'lucide-react';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { Header } from './components/Header';
 import { UrlBar } from './components/UrlBar';
-import { FlowPanel } from './components/FlowPanel';
+import { FlowMenu } from './components/FlowMenu';
+import { FlowPicker } from './components/FlowPicker';
 import { RecordPanel } from './components/RecordPanel';
 import { RunPanel } from './components/RunPanel';
 import { OutputGallery } from './components/OutputGallery';
@@ -29,10 +29,13 @@ export default function App() {
   const setUpdateAvailable = useAppStore(s => s.setUpdateAvailable);
   const stopRecording = useAppStore(s => s.stopRecording);
   const setRunProgress = useAppStore(s => s.setRunProgress);
+  const setUpdateStatus = useAppStore(s => s.setUpdateStatus);
+  const setUpdateProgress = useAppStore(s => s.setUpdateProgress);
+  const setUpdateError = useAppStore(s => s.setUpdateError);
 
   const loadFlows = useFlowStore(s => s.loadFlows);
   const addStep = useFlowStore(s => s.addStep);
-  const activeFlow = useFlowStore(s => s.getActiveFlow);
+  const activeFlowId = useFlowStore(s => s.activeFlowId);
 
   const [editingStep, setEditingStep] = useState<FlowStep | null>(null);
 
@@ -49,7 +52,6 @@ export default function App() {
       const step = { ...namePrompt.step, label: nameInput.trim() || namePrompt.defaultName };
       addStep(step);
       toast.success(`Recorded: ${step.label}`);
-      setActiveTab('flows');
     }
     setNamePrompt({ open: false, defaultName: '', step: null });
     setNameInput('');
@@ -60,47 +62,33 @@ export default function App() {
     setNameInput('');
   };
 
-  const setUpdateStatus = useAppStore(s => s.setUpdateStatus);
-  const setUpdateProgress = useAppStore(s => s.setUpdateProgress);
-  const setUpdateError = useAppStore(s => s.setUpdateError);
-
   // Initialize
   useEffect(() => {
     loadFlows();
     loadSettings();
     appIpc.getVersion().then(setVersion);
 
-    appIpc.onUpdateChecking(() => {
-      setUpdateStatus('checking');
-    });
+    appIpc.onUpdateChecking(() => setUpdateStatus('checking'));
     appIpc.onUpdateAvailable((v: string, releaseUrl?: string) => {
       setUpdateAvailable(v, releaseUrl);
       toast.info(`Update v${v} available!`);
     });
-    appIpc.onUpdateNotAvailable(() => {
-      setUpdateStatus('up-to-date');
-    });
-    appIpc.onUpdateDownloadProgress((percent: number) => {
-      setUpdateProgress(percent);
-    });
+    appIpc.onUpdateNotAvailable(() => setUpdateStatus('up-to-date'));
+    appIpc.onUpdateDownloadProgress((percent: number) => setUpdateProgress(percent));
     appIpc.onUpdateDownloaded(() => {
       setUpdateStatus('downloaded');
       toast.success('Update downloaded — restart to apply.');
     });
-    appIpc.onUpdateError((message: string) => {
-      setUpdateError(message);
-    });
+    appIpc.onUpdateError((message: string) => setUpdateError(message));
   }, [loadFlows, loadSettings, setVersion, setUpdateAvailable, setUpdateStatus, setUpdateProgress, setUpdateError]);
 
   // Listen for recorded elements
   useEffect(() => {
     const handleElementPicked = (data: { selector: string; label: string; strategy: string; xy: [number, number]; rect?: { x: number; y: number; width: number; height: number } }) => {
-      // Capture recordingType BEFORE stopRecording clears it
       const currentRecordingType = useAppStore.getState().recordingType;
       stopRecording();
 
       if (currentRecordingType === 'snap' && data.rect) {
-        // Element-based screenshot: use the element's bounding rect
         const step: SnapStep = {
           type: 'SNAP',
           id: generateId('step'),
@@ -110,7 +98,6 @@ export default function App() {
         setNameInput(step.label);
         setNamePrompt({ open: true, defaultName: step.label, step });
       } else {
-        // Click step
         const step: ClickStep = {
           type: 'CLICK',
           id: generateId('step'),
@@ -139,15 +126,14 @@ export default function App() {
 
   // Listen for flow progress
   useEffect(() => {
-    const handler = (progress: unknown) => {
-      setRunProgress(progress as RunProgress);
-    };
+    const handler = (progress: unknown) => setRunProgress(progress as RunProgress);
     flowIpc.onProgress(handler);
     return () => flowIpc.offProgress(handler as (...args: unknown[]) => void);
   }, [setRunProgress]);
 
+  const hasActiveFlow = !!activeFlowId;
+
   const tabs = [
-    { id: 'flows', label: 'Flows', icon: Layers },
     { id: 'record', label: 'Record', icon: CircleDot },
     { id: 'run', label: 'Run', icon: Play },
     { id: 'output', label: 'Output', icon: Images },
@@ -159,61 +145,57 @@ export default function App() {
         <Header />
         <UrlBar />
 
-        <Tabs.Root
-          value={activeTab}
-          onValueChange={v => setActiveTab(v as typeof activeTab)}
-          className="flex flex-col flex-1 min-h-0"
-        >
-          {/* Tab bar */}
-          <Tabs.List className="flex border-b border-ds-border px-2 bg-ds-surface/30">
-            {tabs.map(tab => (
-              <Tabs.Trigger
-                key={tab.id}
-                value={tab.id}
-                className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium text-ds-text-muted border-b-2 border-transparent transition-all hover:text-ds-text data-[state=active]:text-ds-accent data-[state=active]:border-ds-accent"
-              >
-                <tab.icon className="w-3.5 h-3.5" />
-                {tab.label}
-              </Tabs.Trigger>
-            ))}
-          </Tabs.List>
+        {hasActiveFlow ? (
+          <>
+            {/* Flow menu bar */}
+            <FlowMenu />
 
-          {/* Tab content */}
+            {/* 3 tabs */}
+            <Tabs.Root
+              value={activeTab}
+              onValueChange={v => setActiveTab(v as typeof activeTab)}
+              className="flex flex-col flex-1 min-h-0"
+            >
+              <Tabs.List className="flex border-b border-ds-border px-2 bg-ds-surface/30">
+                {tabs.map(tab => (
+                  <Tabs.Trigger
+                    key={tab.id}
+                    value={tab.id}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-medium text-ds-text-muted border-b-2 border-transparent transition-all hover:text-ds-text data-[state=active]:text-ds-accent data-[state=active]:border-ds-accent"
+                  >
+                    <tab.icon className="w-3.5 h-3.5" />
+                    {tab.label}
+                  </Tabs.Trigger>
+                ))}
+              </Tabs.List>
+
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <Tabs.Content value="record" className="h-full">
+                  <RecordPanel onEditStep={setEditingStep} />
+                </Tabs.Content>
+
+                <Tabs.Content value="run" className="h-full">
+                  <RunPanel />
+                </Tabs.Content>
+
+                <Tabs.Content value="output" className="h-full">
+                  <OutputGallery />
+                </Tabs.Content>
+              </div>
+            </Tabs.Root>
+          </>
+        ) : (
+          /* Flow picker — centered landing page */
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <AnimatePresence mode="wait">
-              <Tabs.Content value="flows" className="h-full" asChild>
-                <motion.div
-                  key="flows"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="h-full"
-                >
-                  <FlowPanel onEditStep={setEditingStep} />
-                </motion.div>
-              </Tabs.Content>
-            </AnimatePresence>
-
-            <Tabs.Content value="record" className="h-full">
-              <RecordPanel />
-            </Tabs.Content>
-
-            <Tabs.Content value="run" className="h-full">
-              <RunPanel />
-            </Tabs.Content>
-
-            <Tabs.Content value="output" className="h-full">
-              <OutputGallery />
-            </Tabs.Content>
+            <FlowPicker />
           </div>
-        </Tabs.Root>
+        )}
 
         {/* Status bar */}
         <div className="flex items-center justify-between px-3 py-1.5 border-t border-ds-border bg-ds-surface/30 text-xs text-ds-text-dim">
           <span>
-            {activeFlow()
-              ? `${activeFlow()!.name} — ${activeFlow()!.steps.length} steps`
+            {hasActiveFlow
+              ? `${useFlowStore.getState().getActiveFlow()?.name} — ${useFlowStore.getState().getActiveFlow()?.steps.length} steps`
               : 'No flow selected'}
           </span>
           <span className="flex items-center gap-1">
@@ -226,7 +208,7 @@ export default function App() {
         <SettingsDialog />
         <StepEditDialog step={editingStep} onClose={() => setEditingStep(null)} />
 
-        {/* Name step dialog (replaces window.prompt) */}
+        {/* Name step dialog */}
         <Dialog.Root open={namePrompt.open} onOpenChange={open => { if (!open) handleNameCancel(); }}>
           <Dialog.Portal>
             <Dialog.Overlay className="fixed top-0 left-0 bottom-0 w-[var(--sidebar-w,380px)] bg-black/60 z-50" />

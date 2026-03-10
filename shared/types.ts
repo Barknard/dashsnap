@@ -66,6 +66,11 @@ export interface FlowConfig {
   flows: Flow[];
 }
 
+export interface Bookmark {
+  name: string;
+  url: string;
+}
+
 export interface AppSettings {
   browserProfilePath: string;
   outputPath: string;
@@ -75,6 +80,7 @@ export interface AppSettings {
   showTips: boolean;
   windowBounds?: { width: number; height: number; x?: number; y?: number };
   sidebarWidth: number;
+  bookmarks?: Bookmark[];
 }
 
 // ─── Run State ────────────────────────────────────────────────────────────────

@@ -15,7 +15,11 @@ import { recorder } from '@/lib/ipc';
 import { generateId } from '@/lib/utils';
 import type { FlowStep } from '@shared/types';
 
-export function RecordPanel() {
+interface RecordPanelProps {
+  onEditStep?: (step: FlowStep) => void;
+}
+
+export function RecordPanel({ onEditStep }: RecordPanelProps) {
   const activeFlow = useFlowStore(s => s.getActiveFlow());
   const addStep = useFlowStore(s => s.addStep);
   const defaults = useFlowStore(s => s.defaults);
@@ -243,7 +247,7 @@ export function RecordPanel() {
           <h3 className="text-sm font-semibold text-ds-text-dim uppercase tracking-wider mb-1 px-1">
             Flow Steps ({activeFlow.steps.length})
           </h3>
-          <StepList onEditStep={() => {}} />
+          <StepList onEditStep={onEditStep || (() => {})} />
         </div>
       )}
 

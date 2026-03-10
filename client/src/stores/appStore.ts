@@ -39,8 +39,8 @@ interface AppStore {
   setUpdateError: (err: string | null) => void;
 
   // UI
-  activeTab: 'flows' | 'record' | 'run' | 'output';
-  setActiveTab: (tab: 'flows' | 'record' | 'run' | 'output') => void;
+  activeTab: 'record' | 'run' | 'output';
+  setActiveTab: (tab: 'record' | 'run' | 'output') => void;
   showSettings: boolean;
   setShowSettings: (show: boolean) => void;
 }
@@ -109,7 +109,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setUpdateError: (err) => set({ updateError: err, updateStatus: 'error' }),
 
   // UI
-  activeTab: 'flows',
+  activeTab: 'record',
   setActiveTab: (tab) => set({ activeTab: tab }),
   showSettings: false,
   setShowSettings: (show) => set({ showSettings: show }),

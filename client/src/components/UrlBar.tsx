@@ -1,18 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, RotateCw, Globe } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { ChevronLeft, ChevronRight, RotateCw, Globe, Star, Trash2 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
 import { browser } from '@/lib/ipc';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
+import type { Bookmark } from '@shared/types';
 
 export function UrlBar() {
   const browserUrl = useAppStore(s => s.browserUrl);
   const setBrowserUrl = useAppStore(s => s.setBrowserUrl);
+  const settings = useAppStore(s => s.settings);
+  const saveSettings = useAppStore(s => s.saveSettings);
   const [inputValue, setInputValue] = useState(browserUrl);
   const [isLoading, setIsLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const bookmarks: Bookmark[] = settings.bookmarks || [];
 
   useEffect(() => {
     if (!isFocused) {
@@ -46,6 +52,33 @@ export function UrlBar() {
       setInputValue(browserUrl);
       inputRef.current?.blur();
     }
+  };
+
+  const isBookmarked = bookmarks.some(b => b.url === browserUrl);
+
+  const toggleBookmark = () => {
+    if (isBookmarked) {
+      saveSettings({ bookmarks: bookmarks.filter(b => b.url !== browserUrl) });
+    } else {
+      const url = browserUrl;
+      if (!url || url === 'about:blank') return;
+      let name: string;
+      try {
+        name = new URL(url).hostname;
+      } catch {
+        name = url.slice(0, 30);
+      }
+      saveSettings({ bookmarks: [...bookmarks, { name, url }] });
+    }
+  };
+
+  const removeBookmark = (url: string) => {
+    saveSettings({ bookmarks: bookmarks.filter(b => b.url !== url) });
+  };
+
+  const goToBookmark = (url: string) => {
+    setIsLoading(true);
+    browser.navigate(url);
   };
 
   return (
@@ -89,6 +122,62 @@ export function UrlBar() {
           </div>
         )}
       </div>
+
+      {/* Bookmark star */}
+      <Tooltip content={isBookmarked ? 'Remove bookmark' : 'Bookmark this page'}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={toggleBookmark}
+          className={isBookmarked ? 'text-ds-amber' : ''}
+        >
+          <Star className={cn('w-3.5 h-3.5', isBookmarked && 'fill-ds-amber')} />
+        </Button>
+      </Tooltip>
+
+      {/* Bookmarks dropdown */}
+      {bookmarks.length > 0 && (
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <Tooltip content="Bookmarks">
+              <Button variant="ghost" size="icon-sm">
+                <Star className="w-3.5 h-3.5 fill-ds-text-dim/30" />
+              </Button>
+            </Tooltip>
+          </DropdownMenu.Trigger>
+
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              className="z-50 min-w-[200px] max-w-[340px] rounded-lg border border-ds-border bg-ds-surface shadow-xl p-1"
+              sideOffset={4}
+              align="end"
+            >
+              <DropdownMenu.Label className="px-2 py-1 text-xs font-semibold text-ds-text-dim uppercase tracking-wider">
+                Bookmarks
+              </DropdownMenu.Label>
+              {bookmarks.map((bm, i) => (
+                <DropdownMenu.Item
+                  key={i}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-surface-hover outline-none group"
+                  onClick={() => goToBookmark(bm.url)}
+                >
+                  <Globe className="w-3 h-3 text-ds-text-dim shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{bm.name}</p>
+                    <p className="text-xs text-ds-text-dim truncate">{bm.url}</p>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeBookmark(bm.url); }}
+                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-ds-red/10 hover:text-ds-red transition-all"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </DropdownMenu.Item>
+              ))}
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      )}
     </div>
   );
 }
