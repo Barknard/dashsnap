@@ -74,6 +74,22 @@ export const recorder = {
     if (!isElectron) { warnNotElectron('recorder:start-screenshot'); return; }
     window.dashsnap!.send('recorder:start-screenshot');
   },
+  startHover: () => {
+    if (!isElectron) { warnNotElectron('recorder:start-hover'); return; }
+    window.dashsnap!.send('recorder:start-hover');
+  },
+  startSelect: () => {
+    if (!isElectron) { warnNotElectron('recorder:start-select'); return; }
+    window.dashsnap!.send('recorder:start-select');
+  },
+  startType: () => {
+    if (!isElectron) { warnNotElectron('recorder:start-type'); return; }
+    window.dashsnap!.send('recorder:start-type');
+  },
+  startScrollElement: () => {
+    if (!isElectron) { warnNotElectron('recorder:start-scroll-element'); return; }
+    window.dashsnap!.send('recorder:start-scroll-element');
+  },
   stop: () => {
     if (!isElectron) return;
     window.dashsnap!.send('recorder:stop');
@@ -198,6 +214,10 @@ export const app = {
   downloadUpdate: () => {
     if (!isElectron) return;
     window.dashsnap!.send('app:download-update');
+  },
+  applyUpdate: (downloadedPath: string) => {
+    if (!isElectron) return;
+    window.dashsnap!.send('app:apply-update', downloadedPath);
   },
   onUpdateChecking: (cb: () => void) => {
     if (!isElectron) return;

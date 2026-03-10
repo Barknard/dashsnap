@@ -5,6 +5,7 @@ import {
   MousePointer, Clock, Camera, Globe, ArrowDown,
   GripVertical, Pencil, X, ChevronUp, ChevronDown,
   Layout, Maximize2, SlidersHorizontal,
+  Hand, ListFilter, Type, ArrowDownUp,
 } from 'lucide-react';
 import { type FlowStep, type PptxLayout, type RunStepStatus, type SnapStep } from '@shared/types';
 import { Badge, stepTypeBadgeVariant } from './ui/Badge';
@@ -22,6 +23,10 @@ const stepIcons: Record<string, typeof MousePointer> = {
   SNAP: Camera,
   NAVIGATE: Globe,
   SCROLL: ArrowDown,
+  HOVER: Hand,
+  SELECT: ListFilter,
+  TYPE: Type,
+  SCROLL_ELEMENT: ArrowDownUp,
 };
 
 function stepDetail(step: FlowStep): string {
@@ -34,6 +39,10 @@ function stepDetail(step: FlowStep): string {
     case 'SNAP': return `${step.region.width}×${step.region.height}px region`;
     case 'NAVIGATE': return truncate(step.url, 40);
     case 'SCROLL': return `Position (${step.x}, ${step.y})`;
+    case 'HOVER': return truncate(step.selector, 40);
+    case 'SELECT': return `${truncate(step.selector, 25)} → ${step.optionValue}`;
+    case 'TYPE': return `"${truncate(step.text, 30)}"`;
+    case 'SCROLL_ELEMENT': return `scrollTop: ${step.scrollTop}`;
     default: return '';
   }
 }

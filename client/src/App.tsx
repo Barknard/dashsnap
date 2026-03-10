@@ -18,7 +18,7 @@ import { useFlowStore } from './stores/flowStore';
 import { useAppStore } from './stores/appStore';
 import { recorder, app as appIpc, flow as flowIpc } from './lib/ipc';
 import { generateId } from './lib/utils';
-import type { FlowStep, ClickStep, SnapStep, RunProgress } from '@shared/types';
+import type { FlowStep, ClickStep, SnapStep, HoverStep, SelectStep, TypeStep, ScrollElementStep, RunProgress } from '@shared/types';
 import { toast } from 'sonner';
 
 export default function App() {
@@ -93,27 +93,70 @@ export default function App() {
       const currentRecordingType = useAppStore.getState().recordingType;
       stopRecording();
 
+      const selectorStrategy = data.strategy as ClickStep['selectorStrategy'];
+
+      let step: FlowStep;
+
       if (currentRecordingType === 'snap' && data.rect) {
-        const step: SnapStep = {
+        step = {
           type: 'SNAP',
           id: generateId('step'),
           label: data.label || 'Screenshot',
           region: data.rect,
-        };
-        setNameInput(step.label);
-        setNamePrompt({ open: true, defaultName: step.label, step });
+        } as SnapStep;
+      } else if (currentRecordingType === 'hover') {
+        step = {
+          type: 'HOVER',
+          id: generateId('step'),
+          label: `Hover: ${data.label || 'element'}`,
+          selector: data.selector,
+          selectorStrategy,
+          fallbackXY: data.xy,
+        } as HoverStep;
+      } else if (currentRecordingType === 'select') {
+        step = {
+          type: 'SELECT',
+          id: generateId('step'),
+          label: `Select: ${data.label || 'dropdown'}`,
+          selector: data.selector,
+          selectorStrategy,
+          fallbackXY: data.xy,
+          optionValue: '',
+        } as SelectStep;
+      } else if (currentRecordingType === 'type') {
+        step = {
+          type: 'TYPE',
+          id: generateId('step'),
+          label: `Type in: ${data.label || 'input'}`,
+          selector: data.selector,
+          selectorStrategy,
+          fallbackXY: data.xy,
+          text: '',
+          clearFirst: true,
+        } as TypeStep;
+      } else if (currentRecordingType === 'scroll-element') {
+        step = {
+          type: 'SCROLL_ELEMENT',
+          id: generateId('step'),
+          label: `Scroll: ${data.label || 'element'}`,
+          selector: data.selector,
+          selectorStrategy,
+          fallbackXY: data.xy,
+          scrollTop: 0,
+        } as ScrollElementStep;
       } else {
-        const step: ClickStep = {
+        step = {
           type: 'CLICK',
           id: generateId('step'),
           label: data.label || 'Click element',
           selector: data.selector,
-          selectorStrategy: data.strategy as ClickStep['selectorStrategy'],
+          selectorStrategy,
           fallbackXY: data.xy,
-        };
-        setNameInput(step.label);
-        setNamePrompt({ open: true, defaultName: step.label, step });
+        } as ClickStep;
       }
+
+      setNameInput(step.label);
+      setNamePrompt({ open: true, defaultName: step.label, step });
     };
 
     const handleRegionSelected = (data: { x: number; y: number; width: number; height: number }) => {

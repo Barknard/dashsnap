@@ -18,9 +18,11 @@ contextBridge.exposeInMainWorld('dashsnap', {
   send: (channel: string, ...args: unknown[]) => {
     const allowedSend = [
       'browser:navigate', 'browser:back', 'browser:forward', 'browser:reload',
-      'recorder:start-click', 'recorder:start-snap', 'recorder:start-screenshot', 'recorder:stop',
+      'recorder:start-click', 'recorder:start-snap', 'recorder:start-screenshot',
+      'recorder:start-hover', 'recorder:start-select', 'recorder:start-type', 'recorder:start-scroll-element',
+      'recorder:stop',
       'flow:run', 'flow:run-step', 'flow:stop',
-      'app:check-update', 'app:install-update', 'app:download-update',
+      'app:check-update', 'app:install-update', 'app:download-update', 'app:apply-update',
       'sidebar:resize',
     ];
     if (allowedSend.includes(channel)) {

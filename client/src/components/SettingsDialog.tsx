@@ -3,7 +3,7 @@ import * as Switch from '@radix-ui/react-switch';
 import {
   Settings, FolderOpen, FileText, Globe, Lightbulb,
   RefreshCw, X, Heart, Download, CheckCircle, AlertCircle, ExternalLink, Loader2,
-  Layout, Maximize2,
+  Layout, Maximize2, RotateCw,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -335,21 +335,20 @@ export function SettingsDialog() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-ds-emerald/10 border border-ds-emerald/20">
                     <CheckCircle className="w-3.5 h-3.5 text-ds-emerald" />
-                    <span className="text-xs text-ds-text">Update saved to Downloads!</span>
+                    <span className="text-xs text-ds-text">Update ready to install!</span>
                   </div>
                   {updateDownloadPath && (
                     <Button
-                      variant="outline"
                       size="sm"
                       className="w-full"
-                      onClick={() => appIpc.openPath(updateDownloadPath)}
+                      onClick={() => appIpc.applyUpdate(updateDownloadPath)}
                     >
-                      <FolderOpen className="w-3.5 h-3.5 mr-1.5" />
-                      Open Downloads
+                      <RotateCw className="w-3.5 h-3.5 mr-1.5" />
+                      Apply Update &amp; Restart
                     </Button>
                   )}
                   <p className="text-xs text-ds-text-dim text-center">
-                    Close this app and run the new version.
+                    The app will close, update, and relaunch automatically.
                   </p>
                 </div>
               )}

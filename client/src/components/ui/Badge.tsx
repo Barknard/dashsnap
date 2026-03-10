@@ -38,6 +38,10 @@ export function stepTypeBadgeVariant(type: string): BadgeProps['variant'] {
     case 'SNAP': return 'emerald';
     case 'NAVIGATE': return 'purple';
     case 'SCROLL': return 'dim';
+    case 'HOVER': return 'purple';
+    case 'SELECT': return 'amber';
+    case 'TYPE': return 'cyan';
+    case 'SCROLL_ELEMENT': return 'dim';
     default: return 'default';
   }
 }

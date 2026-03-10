@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MousePointer2, Camera, Scissors, X } from 'lucide-react';
+import { MousePointer2, Camera, Scissors, Hand, ListFilter, Type, ArrowDownUp, X } from 'lucide-react';
 import { Button } from './ui/Button';
 import { useAppStore } from '@/stores/appStore';
 import { recorder } from '@/lib/ipc';
 
 interface RecordingOverlayProps {
-  type: 'click' | 'snap' | 'screenshot' | null;
+  type: 'click' | 'snap' | 'screenshot' | 'hover' | 'select' | 'type' | 'scroll-element' | null;
 }
 
 export function RecordingOverlay({ type }: RecordingOverlayProps) {
@@ -23,13 +23,26 @@ export function RecordingOverlay({ type }: RecordingOverlayProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [stopRecording]);
 
-  const Icon = type === 'click' ? MousePointer2 : type === 'screenshot' ? Scissors : Camera;
-  const color = type === 'click' ? 'ds-accent' : type === 'screenshot' ? 'ds-cyan' : 'ds-emerald';
-  const message = type === 'click'
-    ? 'Click any element in the browser'
-    : type === 'screenshot'
-    ? 'Draw a region to screenshot'
-    : 'Select an element to screenshot';
+  const iconMap: Record<string, typeof MousePointer2> = {
+    click: MousePointer2, snap: Camera, screenshot: Scissors,
+    hover: Hand, select: ListFilter, type: Type, 'scroll-element': ArrowDownUp,
+  };
+  const colorMap: Record<string, string> = {
+    click: 'ds-accent', snap: 'ds-emerald', screenshot: 'ds-cyan',
+    hover: 'ds-purple', select: 'ds-amber', type: 'ds-cyan', 'scroll-element': 'ds-text-muted',
+  };
+  const messageMap: Record<string, string> = {
+    click: 'Click any element in the browser',
+    snap: 'Select an element to screenshot',
+    screenshot: 'Draw a region to screenshot',
+    hover: 'Select an element to hover',
+    select: 'Select a dropdown element',
+    type: 'Select an input element to type into',
+    'scroll-element': 'Select a scrollable element',
+  };
+  const Icon = iconMap[type || 'click'];
+  const color = colorMap[type || 'click'];
+  const message = messageMap[type || 'click'];
 
   return (
     <motion.div

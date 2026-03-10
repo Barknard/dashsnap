@@ -32,6 +32,16 @@ let sidebarWidth = SIDEBAR_DEFAULT_WIDTH;
 
 const isDev = !app.isPackaged && process.env.NODE_ENV === 'development';
 
+// ─── Prevent uncaught exceptions from crashing the app ──────────────────────
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  // Surface the error to the user instead of crashing
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('app:update-error', `Error: ${err.message}`);
+  }
+});
+
 // ─── Disable GPU cache (Windows permission issues) ──────────────────────────
 
 app.commandLine.appendSwitch('disable-gpu-cache');
@@ -232,6 +242,10 @@ function setupIPC() {
   ipcMain.on('recorder:start-click', () => recorder?.startClickRecording());
   ipcMain.on('recorder:start-snap', () => recorder?.startSnapRecording());
   ipcMain.on('recorder:start-screenshot', () => recorder?.startScreenshotRecording());
+  ipcMain.on('recorder:start-hover', () => recorder?.startHoverRecording());
+  ipcMain.on('recorder:start-select', () => recorder?.startSelectRecording());
+  ipcMain.on('recorder:start-type', () => recorder?.startTypeRecording());
+  ipcMain.on('recorder:start-scroll-element', () => recorder?.startScrollElementRecording());
   ipcMain.on('recorder:stop', () => recorder?.stop());
 
   // Flow management
@@ -319,6 +333,9 @@ function setupIPC() {
   });
   ipcMain.on('app:download-update', () => {
     downloadGitHubUpdate();
+  });
+  ipcMain.on('app:apply-update', (_e, downloadedPath: string) => {
+    applyPortableUpdate(downloadedPath);
   });
   ipcMain.handle('app:open-path', (_e, filePath: string) => {
     if (filePath) {
@@ -411,6 +428,7 @@ function setupAutoUpdater() {
 // Store the download URL for the portable exe from the latest release
 let pendingDownloadUrl: string | null = null;
 let pendingDownloadFilename: string | null = null;
+let pendingDownloadVersion: string | null = null;
 
 async function checkGitHubRelease() {
   try {
@@ -443,9 +461,11 @@ async function checkGitHubRelease() {
           if (portableAsset) {
             pendingDownloadUrl = portableAsset.browser_download_url;
             pendingDownloadFilename = portableAsset.name;
+            pendingDownloadVersion = latest;
           } else {
             pendingDownloadUrl = null;
             pendingDownloadFilename = null;
+            pendingDownloadVersion = null;
           }
 
           if (latest && latest !== current) {
@@ -472,8 +492,9 @@ async function downloadGitHubUpdate() {
     return;
   }
 
-  const downloadDir = app.getPath('downloads');
-  const savePath = path.join(downloadDir, pendingDownloadFilename);
+  // Download to temp so we can hot-swap later
+  const tempDir = app.getPath('temp');
+  const savePath = path.join(tempDir, `dashsnap-update-${pendingDownloadVersion || 'latest'}.exe`);
 
   mainWindow?.webContents.send('app:update-download-progress', 0);
 
@@ -495,7 +516,17 @@ async function downloadGitHubUpdate() {
 
         const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
         let receivedBytes = 0;
-        const fileStream = fs.createWriteStream(savePath);
+        let fileStream: fs.WriteStream;
+        try {
+          fileStream = fs.createWriteStream(savePath);
+        } catch (fsErr) {
+          mainWindow?.webContents.send('app:update-error', `Cannot write to ${savePath}: ${fsErr}`);
+          return;
+        }
+
+        fileStream.on('error', (err) => {
+          mainWindow?.webContents.send('app:update-error', `Write failed: ${err.message}`);
+        });
 
         res.on('data', (chunk: Buffer) => {
           receivedBytes += chunk.length;
@@ -509,8 +540,6 @@ async function downloadGitHubUpdate() {
         res.on('end', () => {
           fileStream.end();
           mainWindow?.webContents.send('app:update-download-complete', savePath);
-          // Open the Downloads folder with the file selected
-          shell.showItemInFolder(savePath);
         });
 
         res.on('error', (err) => {
@@ -526,6 +555,74 @@ async function downloadGitHubUpdate() {
   } catch (err) {
     mainWindow?.webContents.send('app:update-error', `Download failed: ${err}`);
   }
+}
+
+// ─── Portable self-update ────────────────────────────────────────────────────
+
+function applyPortableUpdate(downloadedExe: string) {
+  const currentExe = process.execPath;
+
+  // Only do the hot-swap for portable exe (not dev mode, not NSIS install)
+  if (!app.isPackaged || !currentExe.toLowerCase().endsWith('.exe')) {
+    mainWindow?.webContents.send('app:update-error', 'Self-update only works for portable exe');
+    return;
+  }
+
+  if (!fs.existsSync(downloadedExe)) {
+    mainWindow?.webContents.send('app:update-error', 'Downloaded update file not found');
+    return;
+  }
+
+  // Write a batch script that:
+  // 1. Waits for this process to exit
+  // 2. Overwrites the current exe with the new one
+  // 3. Relaunches the app
+  // 4. Cleans up temp files and itself
+  const batchPath = path.join(app.getPath('temp'), 'dashsnap-update.cmd');
+  const pid = process.pid;
+
+  const script = `@echo off
+title DashSnap Updater
+echo Updating DashSnap...
+:: Wait for the current process to exit
+:waitloop
+tasklist /FI "PID eq ${pid}" 2>NUL | find /I "${pid}" >NUL
+if not errorlevel 1 (
+  timeout /t 1 /nobreak >NUL
+  goto waitloop
+)
+:: Small extra delay for file handle release
+timeout /t 1 /nobreak >NUL
+:: Replace the exe
+copy /Y "${downloadedExe}" "${currentExe}" >NUL
+if errorlevel 1 (
+  echo Update failed - could not replace exe.
+  echo You can manually copy:
+  echo   FROM: ${downloadedExe}
+  echo   TO:   ${currentExe}
+  pause
+  exit /b 1
+)
+:: Clean up the temp download
+del /Q "${downloadedExe}" >NUL 2>&1
+:: Relaunch
+start "" "${currentExe}"
+:: Delete this script
+(goto) 2>NUL & del /Q "%~f0"
+`;
+
+  fs.writeFileSync(batchPath, script, 'utf-8');
+
+  // Spawn the batch script detached so it survives our exit
+  const { spawn } = require('child_process') as typeof import('child_process');
+  spawn('cmd.exe', ['/c', batchPath], {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+  }).unref();
+
+  // Quit the app so the batch script can replace the exe
+  app.quit();
 }
 
 // ─── App lifecycle ──────────────────────────────────────────────────────────

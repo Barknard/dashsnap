@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as Slider from '@radix-ui/react-slider';
 import {
   MousePointer, Clock, Camera, Globe, ArrowDown, X, Copy, AlertTriangle,
+  Hand, ListFilter, Type, ArrowDownUp,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -11,12 +12,16 @@ import { useFlowStore } from '@/stores/flowStore';
 import type { FlowStep } from '@shared/types';
 import { cn } from '@/lib/utils';
 
-const stepIcons = {
+const stepIcons: Record<string, typeof MousePointer> = {
   CLICK: MousePointer,
   WAIT: Clock,
   SNAP: Camera,
   NAVIGATE: Globe,
   SCROLL: ArrowDown,
+  HOVER: Hand,
+  SELECT: ListFilter,
+  TYPE: Type,
+  SCROLL_ELEMENT: ArrowDownUp,
 };
 
 interface StepEditDialogProps {
@@ -32,6 +37,11 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
   const [scrollX, setScrollX] = useState(0);
   const [scrollY, setScrollY] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [optionValue, setOptionValue] = useState('');
+  const [typeText, setTypeText] = useState('');
+  const [clearFirst, setClearFirst] = useState(false);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
 
   useEffect(() => {
     if (!step) return;
@@ -39,6 +49,9 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
     if (step.type === 'WAIT') setSeconds(step.seconds);
     if (step.type === 'NAVIGATE') setUrl(step.url);
     if (step.type === 'SCROLL') { setScrollX(step.x); setScrollY(step.y); }
+    if (step.type === 'SELECT') setOptionValue(step.optionValue);
+    if (step.type === 'TYPE') { setTypeText(step.text); setClearFirst(step.clearFirst ?? false); }
+    if (step.type === 'SCROLL_ELEMENT') { setScrollTop(step.scrollTop); setScrollLeft(step.scrollLeft ?? 0); }
   }, [step]);
 
   if (!step) return null;
@@ -50,12 +63,15 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
     if (step.type === 'WAIT') (updates as Record<string, unknown>).seconds = seconds;
     if (step.type === 'NAVIGATE') (updates as Record<string, unknown>).url = url;
     if (step.type === 'SCROLL') { (updates as Record<string, unknown>).x = scrollX; (updates as Record<string, unknown>).y = scrollY; }
+    if (step.type === 'SELECT') (updates as Record<string, unknown>).optionValue = optionValue;
+    if (step.type === 'TYPE') { (updates as Record<string, unknown>).text = typeText; (updates as Record<string, unknown>).clearFirst = clearFirst; }
+    if (step.type === 'SCROLL_ELEMENT') { (updates as Record<string, unknown>).scrollTop = scrollTop; (updates as Record<string, unknown>).scrollLeft = scrollLeft; }
     updateStep(step.id, updates);
     onClose();
   };
 
   const handleCopySelector = () => {
-    if (step.type === 'CLICK') {
+    if ('selector' in step && step.selector) {
       navigator.clipboard.writeText(step.selector);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -205,6 +221,116 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
                   />
                 </div>
               </div>
+            )}
+
+            {/* HOVER specific */}
+            {step.type === 'HOVER' && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-ds-text-muted">Selector</label>
+                <div className="flex gap-2">
+                  <div className="flex-1 h-9 px-3 flex items-center rounded-lg border border-ds-border bg-ds-bg text-sm text-ds-text-dim font-mono truncate">
+                    {step.selector}
+                  </div>
+                  <Button variant="outline" size="icon" onClick={handleCopySelector}>
+                    <Copy className={cn('w-3.5 h-3.5', copied && 'text-ds-emerald')} />
+                  </Button>
+                </div>
+                <p className="text-xs text-ds-text-dim">Strategy: {step.selectorStrategy}</p>
+              </div>
+            )}
+
+            {/* SELECT specific */}
+            {step.type === 'SELECT' && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ds-text-muted">Selector</label>
+                  <div className="flex gap-2">
+                    <div className="flex-1 h-9 px-3 flex items-center rounded-lg border border-ds-border bg-ds-bg text-sm text-ds-text-dim font-mono truncate">
+                      {step.selector}
+                    </div>
+                    <Button variant="outline" size="icon" onClick={handleCopySelector}>
+                      <Copy className={cn('w-3.5 h-3.5', copied && 'text-ds-emerald')} />
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ds-text-muted">Option Value</label>
+                  <Input
+                    value={optionValue}
+                    onChange={e => setOptionValue(e.target.value)}
+                    placeholder="Option value to select..."
+                  />
+                </div>
+              </>
+            )}
+
+            {/* TYPE specific */}
+            {step.type === 'TYPE' && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ds-text-muted">Selector</label>
+                  <div className="flex gap-2">
+                    <div className="flex-1 h-9 px-3 flex items-center rounded-lg border border-ds-border bg-ds-bg text-sm text-ds-text-dim font-mono truncate">
+                      {step.selector}
+                    </div>
+                    <Button variant="outline" size="icon" onClick={handleCopySelector}>
+                      <Copy className={cn('w-3.5 h-3.5', copied && 'text-ds-emerald')} />
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ds-text-muted">Text to Type</label>
+                  <Input
+                    value={typeText}
+                    onChange={e => setTypeText(e.target.value)}
+                    placeholder="Enter text..."
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-ds-text-muted cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={clearFirst}
+                    onChange={e => setClearFirst(e.target.checked)}
+                    className="rounded border-ds-border"
+                  />
+                  Clear field first
+                </label>
+              </>
+            )}
+
+            {/* SCROLL_ELEMENT specific */}
+            {step.type === 'SCROLL_ELEMENT' && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ds-text-muted">Selector</label>
+                  <div className="flex gap-2">
+                    <div className="flex-1 h-9 px-3 flex items-center rounded-lg border border-ds-border bg-ds-bg text-sm text-ds-text-dim font-mono truncate">
+                      {step.selector}
+                    </div>
+                    <Button variant="outline" size="icon" onClick={handleCopySelector}>
+                      <Copy className={cn('w-3.5 h-3.5', copied && 'text-ds-emerald')} />
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="space-y-1.5 flex-1">
+                    <label className="text-xs font-medium text-ds-text-muted">Scroll Top</label>
+                    <Input
+                      type="number"
+                      value={scrollTop}
+                      onChange={e => setScrollTop(parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="space-y-1.5 flex-1">
+                    <label className="text-xs font-medium text-ds-text-muted">Scroll Left</label>
+                    <Input
+                      type="number"
+                      value={scrollLeft}
+                      onChange={e => setScrollLeft(parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+              </>
             )}
           </div>
 

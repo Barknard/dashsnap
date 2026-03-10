@@ -184,6 +184,22 @@ export class FlowRunner {
           await this.delay(500);
           result.status = 'success';
           break;
+
+        case 'HOVER':
+          result.status = await this.executeHover(step, defaults.clickWaitSeconds);
+          break;
+
+        case 'SELECT':
+          result.status = await this.executeSelect(step, defaults.clickWaitSeconds);
+          break;
+
+        case 'TYPE':
+          result.status = await this.executeType(step, defaults.clickWaitSeconds);
+          break;
+
+        case 'SCROLL_ELEMENT':
+          result.status = await this.executeScrollElement(step);
+          break;
       }
     } catch (err) {
       result.status = 'error';
@@ -248,6 +264,157 @@ export class FlowRunner {
       console.error('Screenshot failed:', err);
       return null;
     }
+  }
+
+  private async executeHover(
+    step: { selector: string; fallbackXY?: [number, number]; selectorStrategy: string },
+    waitSeconds: number,
+  ): Promise<'success' | 'warning'> {
+    const wc = this.view.webContents;
+
+    if (step.selector) {
+      const found = await wc.executeJavaScript(`
+        (function() {
+          const el = document.querySelector('${step.selector.replace(/'/g, "\\'")}');
+          if (el) {
+            const rect = el.getBoundingClientRect();
+            const evt = new MouseEvent('mouseover', { bubbles: true, clientX: rect.left + rect.width/2, clientY: rect.top + rect.height/2 });
+            el.dispatchEvent(evt);
+            const evt2 = new MouseEvent('mouseenter', { bubbles: false, clientX: rect.left + rect.width/2, clientY: rect.top + rect.height/2 });
+            el.dispatchEvent(evt2);
+            return true;
+          }
+          return false;
+        })()
+      `).catch(() => false);
+
+      if (found) {
+        await this.delay(waitSeconds * 1000);
+        return 'success';
+      }
+    }
+
+    if (step.fallbackXY) {
+      const [x, y] = step.fallbackXY;
+      wc.sendInputEvent({ type: 'mouseMove', x, y });
+      await this.delay(waitSeconds * 1000);
+      return 'warning';
+    }
+
+    throw new Error(`Element not found: ${step.selector}`);
+  }
+
+  private async executeSelect(
+    step: { selector: string; fallbackXY?: [number, number]; selectorStrategy: string; optionValue: string },
+    waitSeconds: number,
+  ): Promise<'success' | 'warning'> {
+    const wc = this.view.webContents;
+
+    if (step.selector) {
+      const found = await wc.executeJavaScript(`
+        (function() {
+          const el = document.querySelector('${step.selector.replace(/'/g, "\\'")}');
+          if (el && el.tagName === 'SELECT') {
+            el.value = '${step.optionValue.replace(/'/g, "\\'")}';
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+          }
+          if (el) {
+            el.click();
+            return true;
+          }
+          return false;
+        })()
+      `).catch(() => false);
+
+      if (found) {
+        await this.delay(waitSeconds * 1000);
+        return 'success';
+      }
+    }
+
+    if (step.fallbackXY) {
+      const [x, y] = step.fallbackXY;
+      wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+      wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+      await this.delay(waitSeconds * 1000);
+      return 'warning';
+    }
+
+    throw new Error(`Element not found: ${step.selector}`);
+  }
+
+  private async executeType(
+    step: { selector: string; fallbackXY?: [number, number]; selectorStrategy: string; text: string; clearFirst?: boolean },
+    waitSeconds: number,
+  ): Promise<'success' | 'warning'> {
+    const wc = this.view.webContents;
+
+    if (step.selector) {
+      const found = await wc.executeJavaScript(`
+        (function() {
+          const el = document.querySelector('${step.selector.replace(/'/g, "\\'")}');
+          if (el) {
+            el.focus();
+            ${step.clearFirst ? "el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true }));" : ''}
+            return true;
+          }
+          return false;
+        })()
+      `).catch(() => false);
+
+      if (found) {
+        // Type each character via input events for realistic typing
+        for (const char of step.text) {
+          wc.sendInputEvent({ type: 'char', keyCode: char });
+          await this.delay(30);
+        }
+        await this.delay(waitSeconds * 1000);
+        return 'success';
+      }
+    }
+
+    if (step.fallbackXY) {
+      const [x, y] = step.fallbackXY;
+      wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+      wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+      await this.delay(200);
+      for (const char of step.text) {
+        wc.sendInputEvent({ type: 'char', keyCode: char });
+        await this.delay(30);
+      }
+      await this.delay(waitSeconds * 1000);
+      return 'warning';
+    }
+
+    throw new Error(`Element not found: ${step.selector}`);
+  }
+
+  private async executeScrollElement(
+    step: { selector: string; fallbackXY?: [number, number]; selectorStrategy: string; scrollTop: number; scrollLeft?: number },
+  ): Promise<'success' | 'warning'> {
+    const wc = this.view.webContents;
+
+    if (step.selector) {
+      const found = await wc.executeJavaScript(`
+        (function() {
+          const el = document.querySelector('${step.selector.replace(/'/g, "\\'")}');
+          if (el) {
+            el.scrollTop = ${step.scrollTop};
+            ${step.scrollLeft != null ? `el.scrollLeft = ${step.scrollLeft};` : ''}
+            return true;
+          }
+          return false;
+        })()
+      `).catch(() => false);
+
+      if (found) {
+        await this.delay(500);
+        return 'success';
+      }
+    }
+
+    throw new Error(`Element not found: ${step.selector}`);
   }
 
   private async waitForLoad(timeout: number): Promise<void> {

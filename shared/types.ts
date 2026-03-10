@@ -1,6 +1,6 @@
 // ─── Step Types ───────────────────────────────────────────────────────────────
 
-export type StepType = 'CLICK' | 'WAIT' | 'SNAP' | 'NAVIGATE' | 'SCROLL';
+export type StepType = 'CLICK' | 'WAIT' | 'SNAP' | 'NAVIGATE' | 'SCROLL' | 'HOVER' | 'SELECT' | 'TYPE' | 'SCROLL_ELEMENT';
 
 export interface ClickStep {
   type: 'CLICK';
@@ -42,7 +42,48 @@ export interface ScrollStep {
   y: number;
 }
 
-export type FlowStep = ClickStep | WaitStep | SnapStep | NavigateStep | ScrollStep;
+export interface HoverStep {
+  type: 'HOVER';
+  id: string;
+  label: string;
+  selector: string;
+  fallbackXY?: [number, number];
+  selectorStrategy: 'data-attr' | 'aria-label' | 'text' | 'css-combo' | 'xy-position';
+}
+
+export interface SelectStep {
+  type: 'SELECT';
+  id: string;
+  label: string;
+  selector: string;
+  fallbackXY?: [number, number];
+  selectorStrategy: 'data-attr' | 'aria-label' | 'text' | 'css-combo' | 'xy-position';
+  optionValue: string;
+}
+
+export interface TypeStep {
+  type: 'TYPE';
+  id: string;
+  label: string;
+  selector: string;
+  fallbackXY?: [number, number];
+  selectorStrategy: 'data-attr' | 'aria-label' | 'text' | 'css-combo' | 'xy-position';
+  text: string;
+  clearFirst?: boolean;
+}
+
+export interface ScrollElementStep {
+  type: 'SCROLL_ELEMENT';
+  id: string;
+  label: string;
+  selector: string;
+  fallbackXY?: [number, number];
+  selectorStrategy: 'data-attr' | 'aria-label' | 'text' | 'css-combo' | 'xy-position';
+  scrollTop: number;
+  scrollLeft?: number;
+}
+
+export type FlowStep = ClickStep | WaitStep | SnapStep | NavigateStep | ScrollStep | HoverStep | SelectStep | TypeStep | ScrollElementStep;
 
 // ─── Flow ─────────────────────────────────────────────────────────────────────
 

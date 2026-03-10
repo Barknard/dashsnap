@@ -315,6 +315,30 @@ export class Recorder {
     this.pollForClickResult();
   }
 
+  async startHoverRecording() {
+    this.stopPolling();
+    await this.view.webContents.executeJavaScript(CLICK_OVERLAY_JS);
+    this.pollForClickResult();
+  }
+
+  async startSelectRecording() {
+    this.stopPolling();
+    await this.view.webContents.executeJavaScript(CLICK_OVERLAY_JS);
+    this.pollForClickResult();
+  }
+
+  async startTypeRecording() {
+    this.stopPolling();
+    await this.view.webContents.executeJavaScript(CLICK_OVERLAY_JS);
+    this.pollForClickResult();
+  }
+
+  async startScrollElementRecording() {
+    this.stopPolling();
+    await this.view.webContents.executeJavaScript(CLICK_OVERLAY_JS);
+    this.pollForClickResult();
+  }
+
   async startScreenshotRecording() {
     this.stopPolling();
     // Use the region-drawing overlay for freeform screenshot area
