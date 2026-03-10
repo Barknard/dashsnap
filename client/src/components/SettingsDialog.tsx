@@ -3,6 +3,7 @@ import * as Switch from '@radix-ui/react-switch';
 import {
   Settings, FolderOpen, FileText, Globe, Lightbulb,
   RefreshCw, X, Heart, Download, CheckCircle, AlertCircle, ExternalLink, Loader2,
+  Layout, Maximize2,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -39,6 +40,24 @@ export function SettingsDialog() {
       defaultTemplate: undefined,
       startUrl: 'about:blank',
       showTips: true,
+      pptxLayout: undefined,
+    });
+  };
+
+  // Helper to update a single pptxLayout field
+  const updateLayout = (field: string, value: number | boolean | string) => {
+    const cur = currentSettings.pptxLayout;
+    saveSettings({
+      pptxLayout: {
+        imageX: cur?.imageX ?? 0.3,
+        imageY: cur?.imageY ?? 0.8,
+        imageW: cur?.imageW ?? 12.7,
+        imageH: cur?.imageH ?? 6.2,
+        showHeader: cur?.showHeader ?? true,
+        showFooter: cur?.showFooter ?? true,
+        fitMode: cur?.fitMode ?? 'contain',
+        [field]: value,
+      },
     });
   };
 
@@ -121,6 +140,81 @@ export function SettingsDialog() {
                 <Button variant="outline" size="sm" onClick={handleBrowseTemplate}>
                   Browse
                 </Button>
+              </div>
+            </div>
+
+            {/* PPTX Layout */}
+            <div className="space-y-3">
+              <label className="text-xs font-medium text-ds-text flex items-center gap-1.5">
+                <Layout className="w-3 h-3 text-ds-accent" />
+                PowerPoint Layout
+              </label>
+              <p className="text-xs text-ds-text-dim mb-1">
+                Position and size of screenshots on each slide (inches). Slide is 13.33 x 7.5 in.
+              </p>
+
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ['imageX', 'X Position'],
+                  ['imageY', 'Y Position'],
+                  ['imageW', 'Width'],
+                  ['imageH', 'Height'],
+                ] as const).map(([field, label]) => (
+                  <div key={field} className="space-y-1">
+                    <span className="text-[10px] text-ds-text-dim uppercase tracking-wide">{label}</span>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={currentSettings.pptxLayout?.[field] ?? { imageX: 0.3, imageY: 0.8, imageW: 12.7, imageH: 6.2 }[field]}
+                      onChange={e => updateLayout(field, parseFloat(e.target.value) || 0)}
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Fit Mode */}
+              <div className="space-y-1">
+                <span className="text-[10px] text-ds-text-dim uppercase tracking-wide flex items-center gap-1">
+                  <Maximize2 className="w-2.5 h-2.5" /> Fit Mode
+                </span>
+                <div className="flex gap-1">
+                  {(['contain', 'fill', 'stretch'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      onClick={() => updateLayout('fitMode', mode)}
+                      className={`flex-1 px-2 py-1.5 text-xs rounded-md border transition-colors capitalize ${
+                        (currentSettings.pptxLayout?.fitMode ?? 'contain') === mode
+                          ? 'bg-ds-accent/20 border-ds-accent text-ds-accent'
+                          : 'bg-ds-bg border-ds-border text-ds-text-muted hover:text-ds-text'
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Header / Footer toggles */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-ds-text">Show Header</span>
+                <Switch.Root
+                  checked={currentSettings.pptxLayout?.showHeader ?? true}
+                  onCheckedChange={v => updateLayout('showHeader', v)}
+                  className="w-9 h-5 rounded-full bg-ds-bg border border-ds-border data-[state=checked]:bg-ds-accent transition-colors"
+                >
+                  <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-4 translate-x-0.5" />
+                </Switch.Root>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-ds-text">Show Footer</span>
+                <Switch.Root
+                  checked={currentSettings.pptxLayout?.showFooter ?? true}
+                  onCheckedChange={v => updateLayout('showFooter', v)}
+                  className="w-9 h-5 rounded-full bg-ds-bg border border-ds-border data-[state=checked]:bg-ds-accent transition-colors"
+                >
+                  <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-4 translate-x-0.5" />
+                </Switch.Root>
               </div>
             </div>
 

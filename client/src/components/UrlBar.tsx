@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { ChevronLeft, ChevronRight, RotateCw, Globe, Star, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RotateCw, Globe, Star, Trash2, Bookmark } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
 import { browser } from '@/lib/ipc';
@@ -123,7 +123,7 @@ export function UrlBar() {
         )}
       </div>
 
-      {/* Bookmark star */}
+      {/* Bookmark star — toggles current page */}
       <Tooltip content={isBookmarked ? 'Remove bookmark' : 'Bookmark this page'}>
         <Button
           variant="ghost"
@@ -135,27 +135,38 @@ export function UrlBar() {
         </Button>
       </Tooltip>
 
-      {/* Bookmarks dropdown */}
-      {bookmarks.length > 0 && (
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild>
-            <Tooltip content="Bookmarks">
-              <Button variant="ghost" size="icon-sm">
-                <Star className="w-3.5 h-3.5 fill-ds-text-dim/30" />
-              </Button>
-            </Tooltip>
-          </DropdownMenu.Trigger>
+      {/* Bookmarks picker dropdown */}
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <Tooltip content="Bookmarks">
+            <Button variant="ghost" size="icon-sm" className="relative">
+              <Bookmark className="w-3.5 h-3.5" />
+              {bookmarks.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-ds-accent text-[9px] font-bold text-white leading-none px-0.5">
+                  {bookmarks.length}
+                </span>
+              )}
+            </Button>
+          </Tooltip>
+        </DropdownMenu.Trigger>
 
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              className="z-50 min-w-[200px] max-w-[340px] rounded-lg border border-ds-border bg-ds-surface shadow-xl p-1"
-              sideOffset={4}
-              align="end"
-            >
-              <DropdownMenu.Label className="px-2 py-1 text-xs font-semibold text-ds-text-dim uppercase tracking-wider">
-                Bookmarks
-              </DropdownMenu.Label>
-              {bookmarks.map((bm, i) => (
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            className="z-50 min-w-[220px] max-w-[340px] rounded-lg border border-ds-border bg-ds-surface shadow-xl p-1"
+            sideOffset={4}
+            align="end"
+          >
+            <DropdownMenu.Label className="px-2 py-1 text-xs font-semibold text-ds-text-dim uppercase tracking-wider">
+              Bookmarks
+            </DropdownMenu.Label>
+            {bookmarks.length === 0 ? (
+              <div className="px-3 py-4 text-center">
+                <Star className="w-5 h-5 text-ds-text-dim/40 mx-auto mb-1.5" />
+                <p className="text-xs text-ds-text-dim">No bookmarks yet</p>
+                <p className="text-[10px] text-ds-text-dim/60 mt-0.5">Click the star to save the current page</p>
+              </div>
+            ) : (
+              bookmarks.map((bm, i) => (
                 <DropdownMenu.Item
                   key={i}
                   className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-surface-hover outline-none group"
@@ -164,7 +175,7 @@ export function UrlBar() {
                   <Globe className="w-3 h-3 text-ds-text-dim shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{bm.name}</p>
-                    <p className="text-xs text-ds-text-dim truncate">{bm.url}</p>
+                    <p className="text-[10px] text-ds-text-dim truncate">{bm.url}</p>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); removeBookmark(bm.url); }}
@@ -173,11 +184,11 @@ export function UrlBar() {
                     <Trash2 className="w-3 h-3" />
                   </button>
                 </DropdownMenu.Item>
-              ))}
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
-      )}
+              ))
+            )}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
     </div>
   );
 }

@@ -71,6 +71,16 @@ export interface Bookmark {
   url: string;
 }
 
+export interface PptxLayout {
+  imageX: number;      // inches, default 0.3
+  imageY: number;      // inches, default 0.8
+  imageW: number;      // inches, default 12.7
+  imageH: number;      // inches, default 6.2
+  showHeader: boolean; // default true
+  showFooter: boolean; // default true
+  fitMode: 'contain' | 'fill' | 'stretch'; // default 'contain'
+}
+
 export interface AppSettings {
   browserProfilePath: string;
   outputPath: string;
@@ -81,6 +91,7 @@ export interface AppSettings {
   windowBounds?: { width: number; height: number; x?: number; y?: number };
   sidebarWidth: number;
   bookmarks?: Bookmark[];
+  pptxLayout?: PptxLayout;
 }
 
 // ─── Run State ────────────────────────────────────────────────────────────────
