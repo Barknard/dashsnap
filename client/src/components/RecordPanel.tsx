@@ -114,7 +114,7 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
             <button
               onClick={handleRecordClick}
               disabled={noFlow || isRecording}
-              className="w-full flex flex-col items-center gap-2 p-4 rounded-xl bg-gradient-to-br from-ds-accent/20 to-ds-accent/5 border border-ds-accent/25 hover:border-ds-accent/50 hover:from-ds-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
+              className="w-full h-[120px] flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-gradient-to-br from-ds-accent/20 to-ds-accent/5 border border-ds-accent/25 hover:border-ds-accent/50 hover:from-ds-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
             >
               <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-ds-accent/20 group-hover:bg-ds-accent/30 transition-colors">
                 <MousePointer2 className="w-5 h-5 text-ds-accent" />
@@ -130,7 +130,7 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
             <button
               onClick={handleRecordSnap}
               disabled={noFlow || isRecording}
-              className="w-full flex flex-col items-center gap-2 p-4 rounded-xl bg-gradient-to-br from-ds-emerald/20 to-ds-emerald/5 border border-ds-emerald/25 hover:border-ds-emerald/50 hover:from-ds-emerald/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
+              className="w-full h-[120px] flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-gradient-to-br from-ds-emerald/20 to-ds-emerald/5 border border-ds-emerald/25 hover:border-ds-emerald/50 hover:from-ds-emerald/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
             >
               <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-ds-emerald/20 group-hover:bg-ds-emerald/30 transition-colors">
                 <Camera className="w-5 h-5 text-ds-emerald" />
