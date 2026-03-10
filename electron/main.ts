@@ -53,12 +53,8 @@ if (!gotLock) {
 // ─── App paths ──────────────────────────────────────────────────────────────
 
 function getAppDataPath(): string {
-  // Save files next to the app (same directory it's installed/run from)
-  if (app.isPackaged) {
-    return path.join(path.dirname(app.getPath('exe')), 'DashSnap_Data');
-  }
-  // Dev mode: use project directory
-  return path.join(path.dirname(__dirname), 'DashSnap_Data');
+  // Default: Desktop/DashSnap_Data (always accessible, never in a temp folder)
+  return path.join(app.getPath('desktop'), 'DashSnap_Data');
 }
 
 function ensureDir(dirPath: string) {
@@ -318,6 +314,9 @@ function setupIPC() {
 // ─── Auto-updater ───────────────────────────────────────────────────────────
 
 function setupAutoUpdater() {
+  if (isDev) return;
+
+  // Try electron-updater first (works for NSIS installs)
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
@@ -331,12 +330,40 @@ function setupAutoUpdater() {
 
   autoUpdater.on('error', (err) => {
     console.error('Auto-updater error:', err);
+    // Fallback for portable: check GitHub API directly
+    checkGitHubRelease();
   });
 
-  // Check for updates on launch (force update policy)
-  if (!isDev) {
-    autoUpdater.checkForUpdatesAndNotify();
-  }
+  autoUpdater.checkForUpdatesAndNotify().catch(() => {
+    // Portable exe can't auto-update, fall back to GitHub check
+    checkGitHubRelease();
+  });
+}
+
+async function checkGitHubRelease() {
+  try {
+    const https = await import('https');
+    const options = {
+      hostname: 'api.github.com',
+      path: '/repos/Barknard/dashsnap/releases/latest',
+      headers: { 'User-Agent': 'DashSnap/' + app.getVersion() },
+    };
+    const req = https.get(options, (res) => {
+      let data = '';
+      res.on('data', (chunk: string) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const release = JSON.parse(data);
+          const latest = (release.tag_name || '').replace(/^v/, '');
+          const current = app.getVersion();
+          if (latest && latest !== current) {
+            mainWindow?.webContents.send('app:update-available', latest);
+          }
+        } catch { /* ignore parse errors */ }
+      });
+    });
+    req.on('error', () => { /* silently fail */ });
+  } catch { /* silently fail */ }
 }
 
 // ─── App lifecycle ──────────────────────────────────────────────────────────
