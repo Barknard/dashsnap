@@ -231,6 +231,7 @@ function setupIPC() {
   // Recorder
   ipcMain.on('recorder:start-click', () => recorder?.startClickRecording());
   ipcMain.on('recorder:start-snap', () => recorder?.startSnapRecording());
+  ipcMain.on('recorder:start-screenshot', () => recorder?.startScreenshotRecording());
   ipcMain.on('recorder:stop', () => recorder?.stop());
 
   // Flow management

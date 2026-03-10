@@ -65,9 +65,28 @@ export class PptxBuilder {
 
       // Screenshot image
       if (fs.existsSync(screenshot.path)) {
-        const imageBuffer = fs.readFileSync(screenshot.path);
-        const imageData = imageBuffer.toString('base64');
-        const img = nativeImage.createFromBuffer(imageBuffer);
+        const rawBuffer = fs.readFileSync(screenshot.path);
+        let img = nativeImage.createFromBuffer(rawBuffer);
+        const fullSize = img.getSize();
+
+        // Apply crop if set (percentages)
+        const ct = sl.cropTop ?? 0;
+        const cr = sl.cropRight ?? 0;
+        const cb = sl.cropBottom ?? 0;
+        const cl = sl.cropLeft ?? 0;
+        if (ct > 0 || cr > 0 || cb > 0 || cl > 0) {
+          const cropX = Math.round(fullSize.width * cl / 100);
+          const cropY = Math.round(fullSize.height * ct / 100);
+          const cropW = Math.round(fullSize.width * (100 - cl - cr) / 100);
+          const cropH = Math.round(fullSize.height * (100 - ct - cb) / 100);
+          if (cropW > 0 && cropH > 0) {
+            img = nativeImage.createFromBuffer(
+              img.crop({ x: cropX, y: cropY, width: cropW, height: cropH }).toPNG()
+            );
+          }
+        }
+
+        const imageData = img.toPNG().toString('base64');
         const imgSize = img.getSize();
 
         if (sl.fitMode === 'stretch') {

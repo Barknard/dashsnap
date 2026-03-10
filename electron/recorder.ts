@@ -315,6 +315,13 @@ export class Recorder {
     this.pollForClickResult();
   }
 
+  async startScreenshotRecording() {
+    this.stopPolling();
+    // Use the region-drawing overlay for freeform screenshot area
+    await this.view.webContents.executeJavaScript(SNAP_OVERLAY_JS);
+    this.pollForSnapResult();
+  }
+
   stop() {
     this.stopPolling();
     this.view.webContents.executeJavaScript(`

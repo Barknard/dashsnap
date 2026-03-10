@@ -116,16 +116,30 @@ export default function App() {
       }
     };
 
+    const handleRegionSelected = (data: { x: number; y: number; width: number; height: number }) => {
+      stopRecording();
+      const step: SnapStep = {
+        type: 'SNAP',
+        id: generateId('step'),
+        label: 'Screenshot',
+        region: data,
+      };
+      setNameInput(step.label);
+      setNamePrompt({ open: true, defaultName: step.label, step });
+    };
+
     const handleCancelled = () => {
       stopRecording();
       toast('Recording cancelled');
     };
 
     recorder.onElementPicked(handleElementPicked);
+    recorder.onRegionSelected(handleRegionSelected);
     recorder.onCancelled(handleCancelled);
 
     return () => {
       recorder.offElementPicked(handleElementPicked as (...args: unknown[]) => void);
+      recorder.offRegionSelected(handleRegionSelected as (...args: unknown[]) => void);
     };
   }, [addStep, stopRecording, setActiveTab]);
 

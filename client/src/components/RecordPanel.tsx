@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   MousePointer2, Camera, Timer, Globe, ArrowDownToLine,
-  Plus,
+  Plus, Scissors,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -42,6 +42,12 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
     if (!activeFlow) return;
     startRecording('snap');
     recorder.startSnap();
+  };
+
+  const handleRecordScreenshot = () => {
+    if (!activeFlow) return;
+    startRecording('screenshot');
+    recorder.startScreenshot();
   };
 
   const handleAddWait = () => {
@@ -99,7 +105,7 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
         >
           <span className="w-2 h-2 rounded-full bg-ds-red animate-pulse-recording" />
           <span className="text-xs font-medium text-ds-red">
-            Recording {recordingType === 'click' ? 'click' : 'screenshot'}... select an element in the browser
+            Recording {recordingType === 'click' ? 'click' : recordingType === 'screenshot' ? 'screenshot' : 'snap'}... {recordingType === 'screenshot' ? 'draw a region' : 'select an element'} in the browser
           </span>
         </motion.div>
       )}
@@ -109,19 +115,19 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
         <h3 className="text-sm font-semibold text-ds-text-dim uppercase tracking-wider mb-2 px-1">
           Record Actions
         </h3>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
             <button
               onClick={handleRecordClick}
               disabled={noFlow || isRecording}
-              className="w-full h-[120px] flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-gradient-to-br from-ds-accent/20 to-ds-accent/5 border border-ds-accent/25 hover:border-ds-accent/50 hover:from-ds-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
+              className="w-full h-[120px] flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-gradient-to-br from-ds-accent/20 to-ds-accent/5 border border-ds-accent/25 hover:border-ds-accent/50 hover:from-ds-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
             >
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-ds-accent/20 group-hover:bg-ds-accent/30 transition-colors">
-                <MousePointer2 className="w-5 h-5 text-ds-accent" />
+              <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-ds-accent/20 group-hover:bg-ds-accent/30 transition-colors">
+                <MousePointer2 className="w-4 h-4 text-ds-accent" />
               </div>
               <div className="text-center">
-                <p className="text-xs font-semibold text-ds-text">Record Click</p>
-                <p className="text-xs text-ds-text-dim mt-0.5">Click any element</p>
+                <p className="text-[11px] font-semibold text-ds-text">Record Click</p>
+                <p className="text-[10px] text-ds-text-dim mt-0.5">Click element</p>
               </div>
             </button>
           </motion.div>
@@ -130,14 +136,30 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
             <button
               onClick={handleRecordSnap}
               disabled={noFlow || isRecording}
-              className="w-full h-[120px] flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-gradient-to-br from-ds-emerald/20 to-ds-emerald/5 border border-ds-emerald/25 hover:border-ds-emerald/50 hover:from-ds-emerald/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
+              className="w-full h-[120px] flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-gradient-to-br from-ds-emerald/20 to-ds-emerald/5 border border-ds-emerald/25 hover:border-ds-emerald/50 hover:from-ds-emerald/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
             >
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-ds-emerald/20 group-hover:bg-ds-emerald/30 transition-colors">
-                <Camera className="w-5 h-5 text-ds-emerald" />
+              <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-ds-emerald/20 group-hover:bg-ds-emerald/30 transition-colors">
+                <Camera className="w-4 h-4 text-ds-emerald" />
               </div>
               <div className="text-center">
-                <p className="text-xs font-semibold text-ds-text">Capture Element</p>
-                <p className="text-xs text-ds-text-dim mt-0.5">Select element to screenshot</p>
+                <p className="text-[11px] font-semibold text-ds-text">Snap Element</p>
+                <p className="text-[10px] text-ds-text-dim mt-0.5">Pick element</p>
+              </div>
+            </button>
+          </motion.div>
+
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+            <button
+              onClick={handleRecordScreenshot}
+              disabled={noFlow || isRecording}
+              className="w-full h-[120px] flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-gradient-to-br from-ds-cyan/20 to-ds-cyan/5 border border-ds-cyan/25 hover:border-ds-cyan/50 hover:from-ds-cyan/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
+            >
+              <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-ds-cyan/20 group-hover:bg-ds-cyan/30 transition-colors">
+                <Scissors className="w-4 h-4 text-ds-cyan" />
+              </div>
+              <div className="text-center">
+                <p className="text-[11px] font-semibold text-ds-text">Screenshot</p>
+                <p className="text-[10px] text-ds-text-dim mt-0.5">Draw region</p>
               </div>
             </button>
           </motion.div>

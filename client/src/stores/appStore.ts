@@ -11,8 +11,8 @@ interface AppStore {
 
   // Recording
   isRecording: boolean;
-  recordingType: 'click' | 'snap' | null;
-  startRecording: (type: 'click' | 'snap') => void;
+  recordingType: 'click' | 'snap' | 'screenshot' | null;
+  startRecording: (type: 'click' | 'snap' | 'screenshot') => void;
   stopRecording: () => void;
 
   // Run state

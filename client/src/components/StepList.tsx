@@ -327,6 +327,72 @@ export function StepList({ onEditStep }: StepListProps) {
                           <Switch.Thumb className="block w-3 h-3 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-3 translate-x-0.5" />
                         </Switch.Root>
                       </div>
+
+                      {/* Crop */}
+                      <div className="space-y-1.5 pt-1 border-t border-ds-border/30">
+                        <span className="text-[9px] text-ds-text-dim uppercase tracking-wide">Crop (%)</span>
+
+                        {/* Live preview */}
+                        {(() => {
+                          const ct = sl?.cropTop ?? globalLayout?.cropTop ?? 0;
+                          const cr = sl?.cropRight ?? globalLayout?.cropRight ?? 0;
+                          const cb = sl?.cropBottom ?? globalLayout?.cropBottom ?? 0;
+                          const cl = sl?.cropLeft ?? globalLayout?.cropLeft ?? 0;
+                          const hasCrop = ct > 0 || cr > 0 || cb > 0 || cl > 0;
+                          return (
+                            <div className="relative w-full h-20 rounded bg-ds-bg border border-ds-border overflow-hidden">
+                              {/* Full image area */}
+                              <div className="absolute inset-0 bg-ds-accent/5" />
+                              {/* Visible area after crop */}
+                              <div
+                                className="absolute bg-ds-accent/20 border border-ds-accent/40 transition-all duration-200"
+                                style={{
+                                  top: `${ct}%`,
+                                  right: `${cr}%`,
+                                  bottom: `${cb}%`,
+                                  left: `${cl}%`,
+                                }}
+                              />
+                              {/* Crop overlay dimming */}
+                              {hasCrop && (
+                                <>
+                                  {ct > 0 && <div className="absolute top-0 left-0 right-0 bg-ds-red/15 transition-all duration-200" style={{ height: `${ct}%` }} />}
+                                  {cb > 0 && <div className="absolute bottom-0 left-0 right-0 bg-ds-red/15 transition-all duration-200" style={{ height: `${cb}%` }} />}
+                                  {cl > 0 && <div className="absolute left-0 bg-ds-red/15 transition-all duration-200" style={{ top: `${ct}%`, bottom: `${cb}%`, width: `${cl}%` }} />}
+                                  {cr > 0 && <div className="absolute right-0 bg-ds-red/15 transition-all duration-200" style={{ top: `${ct}%`, bottom: `${cb}%`, width: `${cr}%` }} />}
+                                </>
+                              )}
+                              {/* Labels */}
+                              <span className="absolute top-0.5 left-1/2 -translate-x-1/2 text-[8px] text-ds-text-dim">{ct}%</span>
+                              <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] text-ds-text-dim">{cb}%</span>
+                              <span className="absolute left-0.5 top-1/2 -translate-y-1/2 text-[8px] text-ds-text-dim">{cl}%</span>
+                              <span className="absolute right-0.5 top-1/2 -translate-y-1/2 text-[8px] text-ds-text-dim">{cr}%</span>
+                            </div>
+                          );
+                        })()}
+
+                        <div className="grid grid-cols-4 gap-1">
+                          {([
+                            ['cropTop', 'Top'],
+                            ['cropRight', 'Right'],
+                            ['cropBottom', 'Bottom'],
+                            ['cropLeft', 'Left'],
+                          ] as const).map(([field, label]) => (
+                            <div key={field} className="space-y-0.5">
+                              <span className="text-[8px] text-ds-text-dim uppercase">{label}</span>
+                              <Input
+                                type="number"
+                                min="0"
+                                max="50"
+                                step="1"
+                                value={sl?.[field] ?? globalLayout?.[field] ?? 0}
+                                onChange={e => updateSnapLayout(field, Math.min(50, Math.max(0, parseInt(e.target.value) || 0)))}
+                                className="font-mono text-[10px] h-6 px-1 text-center"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </motion.div>
                 )}

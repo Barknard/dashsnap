@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MousePointer2, Camera, X } from 'lucide-react';
+import { MousePointer2, Camera, Scissors, X } from 'lucide-react';
 import { Button } from './ui/Button';
 import { useAppStore } from '@/stores/appStore';
 import { recorder } from '@/lib/ipc';
 
 interface RecordingOverlayProps {
-  type: 'click' | 'snap' | null;
+  type: 'click' | 'snap' | 'screenshot' | null;
 }
 
 export function RecordingOverlay({ type }: RecordingOverlayProps) {
@@ -23,10 +23,12 @@ export function RecordingOverlay({ type }: RecordingOverlayProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [stopRecording]);
 
-  const Icon = type === 'click' ? MousePointer2 : Camera;
-  const color = type === 'click' ? 'ds-accent' : 'ds-emerald';
+  const Icon = type === 'click' ? MousePointer2 : type === 'screenshot' ? Scissors : Camera;
+  const color = type === 'click' ? 'ds-accent' : type === 'screenshot' ? 'ds-cyan' : 'ds-emerald';
   const message = type === 'click'
     ? 'Click any element in the browser'
+    : type === 'screenshot'
+    ? 'Draw a region to screenshot'
     : 'Select an element to screenshot';
 
   return (

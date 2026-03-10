@@ -70,6 +70,10 @@ export const recorder = {
     if (!isElectron) { warnNotElectron('recorder:start-snap'); return; }
     window.dashsnap!.send('recorder:start-snap');
   },
+  startScreenshot: () => {
+    if (!isElectron) { warnNotElectron('recorder:start-screenshot'); return; }
+    window.dashsnap!.send('recorder:start-screenshot');
+  },
   stop: () => {
     if (!isElectron) return;
     window.dashsnap!.send('recorder:stop');

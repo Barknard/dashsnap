@@ -80,6 +80,10 @@ export interface PptxLayout {
   showHeader: boolean; // default true
   showFooter: boolean; // default true
   fitMode: 'contain' | 'fill' | 'stretch'; // default 'contain'
+  cropTop?: number;    // percent 0-50, default 0
+  cropRight?: number;  // percent 0-50, default 0
+  cropBottom?: number; // percent 0-50, default 0
+  cropLeft?: number;   // percent 0-50, default 0
 }
 
 export interface AppSettings {
