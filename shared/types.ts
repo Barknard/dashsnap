@@ -24,6 +24,7 @@ export interface SnapStep {
   label: string;
   region: { x: number; y: number; width: number; height: number };
   fullPage?: boolean;
+  slideLayout?: PptxLayout;
 }
 
 export interface NavigateStep {

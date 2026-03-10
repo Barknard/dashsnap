@@ -1,11 +1,15 @@
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import * as Switch from '@radix-ui/react-switch';
 import {
   MousePointer, Clock, Camera, Globe, ArrowDown,
   GripVertical, Pencil, X, ChevronUp, ChevronDown,
+  Layout, Maximize2, SlidersHorizontal,
 } from 'lucide-react';
-import { type FlowStep, type RunStepStatus } from '@shared/types';
+import { type FlowStep, type PptxLayout, type RunStepStatus, type SnapStep } from '@shared/types';
 import { Badge, stepTypeBadgeVariant } from './ui/Badge';
 import { Button } from './ui/Button';
+import { Input } from './ui/Input';
 import { Tooltip } from './ui/Tooltip';
 import { EmptyState } from './EmptyState';
 import { useFlowStore } from '@/stores/flowStore';
@@ -56,8 +60,11 @@ export function StepList({ onEditStep }: StepListProps) {
   const removeStep = useFlowStore(s => s.removeStep);
   const moveStepUp = useFlowStore(s => s.moveStepUp);
   const moveStepDown = useFlowStore(s => s.moveStepDown);
+  const updateStep = useFlowStore(s => s.updateStep);
   const runProgress = useAppStore(s => s.runProgress);
   const setActiveTab = useAppStore(s => s.setActiveTab);
+  const globalLayout = useAppStore(s => s.settings.pptxLayout);
+  const [expandedSnapId, setExpandedSnapId] = useState<string | null>(null);
 
   if (!flow) {
     return (
@@ -122,6 +129,34 @@ export function StepList({ onEditStep }: StepListProps) {
           const runResult = runProgress?.results.find(r => r.stepId === step.id);
           const isCurrentlyRunning = runProgress?.status === 'running' && runProgress.currentStep === index;
 
+          const isSnap = step.type === 'SNAP';
+          const isExpanded = isSnap && expandedSnapId === step.id;
+          const snapStep = isSnap ? step as SnapStep : null;
+
+          const updateSnapLayout = (field: string, value: number | boolean | string) => {
+            if (!snapStep) return;
+            const cur = snapStep.slideLayout;
+            const defaults = {
+              imageX: globalLayout?.imageX ?? 0.3,
+              imageY: globalLayout?.imageY ?? 0.8,
+              imageW: globalLayout?.imageW ?? 12.7,
+              imageH: globalLayout?.imageH ?? 6.2,
+              showHeader: globalLayout?.showHeader ?? true,
+              showFooter: globalLayout?.showFooter ?? true,
+              fitMode: globalLayout?.fitMode ?? 'contain' as const,
+            };
+            updateStep(step.id, {
+              slideLayout: { ...defaults, ...cur, [field]: value },
+            } as Partial<FlowStep>);
+          };
+
+          const clearSnapLayout = () => {
+            updateStep(step.id, { slideLayout: undefined } as Partial<FlowStep>);
+          };
+
+          const sl = snapStep?.slideLayout;
+          const hasCustomLayout = !!sl;
+
           return (
             <motion.div
               key={step.id}
@@ -130,61 +165,172 @@ export function StepList({ onEditStep }: StepListProps) {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 12, scale: 0.95 }}
               transition={{ duration: 0.2, type: 'spring', stiffness: 300, damping: 25 }}
-              onClick={() => selectStep(isSelected ? null : index)}
               className={cn(
-                'group flex items-center gap-2 p-2.5 rounded-lg border-l-[3px] border border-ds-border/50 bg-ds-surface/50',
-                'hover:bg-ds-surface-hover cursor-pointer transition-all duration-150',
+                'rounded-lg border-l-[3px] border border-ds-border/50 bg-ds-surface/50 overflow-hidden',
+                'transition-all duration-150',
                 isSelected && 'bg-ds-accent/5 border-ds-accent/30 border-l-ds-accent',
                 !isSelected && statusBorderColor(runResult?.status),
                 isCurrentlyRunning && 'ring-1 ring-ds-accent/40 bg-ds-accent/5',
               )}
             >
-              {/* Step number */}
-              <span className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold text-ds-text-dim bg-ds-bg shrink-0">
-                {index + 1}
-              </span>
-
-              {/* Icon */}
-              <Icon className={cn('w-3.5 h-3.5 shrink-0', isCurrentlyRunning ? 'text-ds-accent animate-pulse' : 'text-ds-text-muted')} />
-
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <Badge variant={stepTypeBadgeVariant(step.type)} className="text-sm px-1.5 py-0">
-                    {step.type}
-                  </Badge>
-                  <span className="text-xs font-medium text-ds-text truncate">
-                    {step.label}
-                  </span>
+              {/* Main row */}
+              <div
+                onClick={() => selectStep(isSelected ? null : index)}
+                className="group flex items-center gap-2 p-2.5 hover:bg-ds-surface-hover cursor-pointer"
+              >
+                <span className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold text-ds-text-dim bg-ds-bg shrink-0">
+                  {index + 1}
+                </span>
+                <Icon className={cn('w-3.5 h-3.5 shrink-0', isCurrentlyRunning ? 'text-ds-accent animate-pulse' : 'text-ds-text-muted')} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant={stepTypeBadgeVariant(step.type)} className="text-sm px-1.5 py-0">
+                      {step.type}
+                    </Badge>
+                    <span className="text-xs font-medium text-ds-text truncate">
+                      {step.label}
+                    </span>
+                  </div>
+                  <p className="text-xs text-ds-text-dim truncate mt-0.5">
+                    {isSnap
+                      ? hasCustomLayout
+                        ? `${stepDetail(step)} · Custom slide layout`
+                        : `${stepDetail(step)} · Click to set slide layout`
+                      : stepDetail(step)}
+                  </p>
                 </div>
-                <p className="text-xs text-ds-text-dim truncate mt-0.5">
-                  {stepDetail(step)}
-                </p>
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  {isSnap && (
+                    <Tooltip content="Slide layout">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={(e) => { e.stopPropagation(); setExpandedSnapId(isExpanded ? null : step.id); }}
+                        className={hasCustomLayout ? 'text-ds-accent' : ''}
+                      >
+                        <SlidersHorizontal className="w-3 h-3" />
+                      </Button>
+                    </Tooltip>
+                  )}
+                  <Tooltip content="Edit">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={(e) => { e.stopPropagation(); onEditStep(step); }}
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Remove">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={(e) => { e.stopPropagation(); removeStep(step.id); }}
+                      className="hover:text-ds-red"
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </Tooltip>
+                  <GripVertical className="w-3 h-3 text-ds-text-dim/50 cursor-grab" />
+                </div>
               </div>
 
-              {/* Drag handle + actions */}
-              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                <Tooltip content="Edit">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={(e) => { e.stopPropagation(); onEditStep(step); }}
+              {/* Expandable slide layout panel for SNAP steps */}
+              <AnimatePresence>
+                {isExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    className="overflow-hidden"
                   >
-                    <Pencil className="w-3 h-3" />
-                  </Button>
-                </Tooltip>
-                <Tooltip content="Remove">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={(e) => { e.stopPropagation(); removeStep(step.id); }}
-                    className="hover:text-ds-red"
-                  >
-                    <X className="w-3 h-3" />
-                  </Button>
-                </Tooltip>
-                <GripVertical className="w-3 h-3 text-ds-text-dim/50 cursor-grab" />
-              </div>
+                    <div className="px-3 pb-3 pt-1 border-t border-ds-border/30 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-ds-text flex items-center gap-1">
+                          <Layout className="w-3 h-3 text-ds-accent" />
+                          Slide Layout
+                        </span>
+                        {hasCustomLayout && (
+                          <button
+                            onClick={clearSnapLayout}
+                            className="text-[10px] text-ds-text-dim hover:text-ds-red transition-colors"
+                          >
+                            Reset to global
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-ds-text-dim">
+                        Set image position and size on this slide (inches). Slide is 13.33 x 7.5 in.
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {([
+                          ['imageX', 'X Pos', 0.3],
+                          ['imageY', 'Y Pos', 0.8],
+                          ['imageW', 'Width', 12.7],
+                          ['imageH', 'Height', 6.2],
+                        ] as const).map(([field, label, fallback]) => (
+                          <div key={field} className="space-y-0.5">
+                            <span className="text-[9px] text-ds-text-dim uppercase tracking-wide">{label}</span>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              value={sl?.[field] ?? globalLayout?.[field] ?? fallback}
+                              onChange={e => updateSnapLayout(field, parseFloat(e.target.value) || 0)}
+                              className="font-mono text-xs h-7"
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Fit mode */}
+                      <div className="space-y-1">
+                        <span className="text-[9px] text-ds-text-dim uppercase tracking-wide flex items-center gap-1">
+                          <Maximize2 className="w-2 h-2" /> Fit Mode
+                        </span>
+                        <div className="flex gap-1">
+                          {(['contain', 'fill', 'stretch'] as const).map(mode => (
+                            <button
+                              key={mode}
+                              onClick={() => updateSnapLayout('fitMode', mode)}
+                              className={`flex-1 px-1.5 py-1 text-[10px] rounded border transition-colors capitalize ${
+                                (sl?.fitMode ?? globalLayout?.fitMode ?? 'contain') === mode
+                                  ? 'bg-ds-accent/20 border-ds-accent text-ds-accent'
+                                  : 'bg-ds-bg border-ds-border text-ds-text-muted hover:text-ds-text'
+                              }`}
+                            >
+                              {mode}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Header / Footer */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-ds-text">Header</span>
+                        <Switch.Root
+                          checked={sl?.showHeader ?? globalLayout?.showHeader ?? true}
+                          onCheckedChange={v => updateSnapLayout('showHeader', v)}
+                          className="w-7 h-4 rounded-full bg-ds-bg border border-ds-border data-[state=checked]:bg-ds-accent transition-colors"
+                        >
+                          <Switch.Thumb className="block w-3 h-3 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-3 translate-x-0.5" />
+                        </Switch.Root>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-ds-text">Footer</span>
+                        <Switch.Root
+                          checked={sl?.showFooter ?? globalLayout?.showFooter ?? true}
+                          onCheckedChange={v => updateSnapLayout('showFooter', v)}
+                          className="w-7 h-4 rounded-full bg-ds-bg border border-ds-border data-[state=checked]:bg-ds-accent transition-colors"
+                        >
+                          <Switch.Thumb className="block w-3 h-3 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-3 translate-x-0.5" />
+                        </Switch.Root>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           );
         })}

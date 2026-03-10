@@ -2,7 +2,7 @@ import { BrowserView, BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { ConfigManager } from './config-manager';
-import type { Flow, FlowStep, RunProgress, RunStepResult } from '../shared/types';
+import type { Flow, FlowStep, PptxLayout, RunProgress, RunStepResult, SnapStep } from '../shared/types';
 
 export class FlowRunner {
   private view: BrowserView;
@@ -30,7 +30,7 @@ export class FlowRunner {
       path.join(this.config.getBasePath(), '..', 'output');
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-    const screenshots: Array<{ name: string; path: string }> = [];
+    const screenshots: Array<{ name: string; path: string; slideLayout?: PptxLayout }> = [];
     const progress: RunProgress = {
       flowId,
       currentStep: 0,
@@ -108,7 +108,7 @@ export class FlowRunner {
       path.join(this.config.getBasePath(), '..', 'output');
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-    const screenshots: Array<{ name: string; path: string }> = [];
+    const screenshots: Array<{ name: string; path: string; slideLayout?: PptxLayout }> = [];
     const logLines: string[] = [];
 
     const progress: RunProgress = {
@@ -140,7 +140,7 @@ export class FlowRunner {
     step: FlowStep,
     defaults: { clickWaitSeconds: number; snapWaitSeconds: number; navigationTimeoutSeconds: number },
     outputDir: string,
-    screenshots: Array<{ name: string; path: string }>,
+    screenshots: Array<{ name: string; path: string; slideLayout?: PptxLayout }>,
     logLines: string[],
   ): Promise<RunStepResult> {
     const result: RunStepResult = { stepId: step.id, status: 'pending' };
@@ -160,7 +160,7 @@ export class FlowRunner {
         case 'SNAP': {
           const screenshotPath = await this.executeSnap(step, outputDir, screenshots.length);
           if (screenshotPath) {
-            screenshots.push({ name: step.label, path: screenshotPath });
+            screenshots.push({ name: step.label, path: screenshotPath, slideLayout: (step as SnapStep).slideLayout });
             result.screenshotPath = screenshotPath;
             result.status = 'success';
           } else {

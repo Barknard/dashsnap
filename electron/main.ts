@@ -270,7 +270,7 @@ function setupIPC() {
   ipcMain.on('flow:stop', () => flowRunner?.stop());
 
   // PPTX
-  ipcMain.handle('pptx:build', (_e, flowId: string, screenshots: Array<{ name: string; path: string }>) =>
+  ipcMain.handle('pptx:build', (_e, flowId: string, screenshots: Array<{ name: string; path: string; slideLayout?: import('../shared/types').PptxLayout }>) =>
     pptxBuilder?.build(flowId, screenshots));
 
   // Settings

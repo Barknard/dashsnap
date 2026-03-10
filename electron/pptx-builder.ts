@@ -24,7 +24,7 @@ export class PptxBuilder {
 
   async build(
     flowId: string,
-    screenshots: Array<{ name: string; path: string }>,
+    screenshots: Array<{ name: string; path: string; slideLayout?: PptxLayout }>,
   ): Promise<string> {
     const flowConfig = this.config.loadFlows();
     const flow = flowConfig.flows.find((f: { id: string }) => f.id === flowId);
@@ -41,10 +41,14 @@ export class PptxBuilder {
     const footerText = '716D87';
 
     for (const screenshot of screenshots) {
+      // Per-screenshot layout overrides global
+      const sl: PptxLayout = screenshot.slideLayout
+        ? { ...layout, ...screenshot.slideLayout }
+        : layout;
       const slide = pptx.addSlide();
 
       // Header bar (optional)
-      if (layout.showHeader) {
+      if (sl.showHeader) {
         slide.addShape(pptx.ShapeType.rect, {
           x: 0, y: 0, w: '100%', h: 0.6,
           fill: { color: headerBg },
@@ -66,38 +70,29 @@ export class PptxBuilder {
         const img = nativeImage.createFromBuffer(imageBuffer);
         const imgSize = img.getSize();
 
-        if (layout.fitMode === 'stretch') {
-          // Stretch to fill the defined area exactly
+        if (sl.fitMode === 'stretch') {
           slide.addImage({
             data: `image/png;base64,${imageData}`,
-            x: layout.imageX,
-            y: layout.imageY,
-            w: layout.imageW,
-            h: layout.imageH,
+            x: sl.imageX, y: sl.imageY, w: sl.imageW, h: sl.imageH,
           });
-        } else if (layout.fitMode === 'fill') {
-          // Fill the area (may crop)
+        } else if (sl.fitMode === 'fill') {
           slide.addImage({
             data: `image/png;base64,${imageData}`,
-            x: layout.imageX,
-            y: layout.imageY,
-            w: layout.imageW,
-            h: layout.imageH,
-            sizing: { type: 'cover', w: layout.imageW, h: layout.imageH },
+            x: sl.imageX, y: sl.imageY, w: sl.imageW, h: sl.imageH,
+            sizing: { type: 'cover', w: sl.imageW, h: sl.imageH },
           });
         } else {
-          // 'contain' — preserve aspect ratio, centered in the defined area
           let imgW = imgSize.width / 96;
           let imgH = imgSize.height / 96;
 
-          if (imgW > layout.imageW || imgH > layout.imageH) {
-            const scale = Math.min(layout.imageW / imgW, layout.imageH / imgH);
+          if (imgW > sl.imageW || imgH > sl.imageH) {
+            const scale = Math.min(sl.imageW / imgW, sl.imageH / imgH);
             imgW *= scale;
             imgH *= scale;
           }
 
-          const x = layout.imageX + (layout.imageW - imgW) / 2;
-          const y = layout.imageY + (layout.imageH - imgH) / 2;
+          const x = sl.imageX + (sl.imageW - imgW) / 2;
+          const y = sl.imageY + (sl.imageH - imgH) / 2;
 
           slide.addImage({
             data: `image/png;base64,${imageData}`,
@@ -107,7 +102,7 @@ export class PptxBuilder {
       }
 
       // Footer (optional)
-      if (layout.showFooter) {
+      if (sl.showFooter) {
         const timestamp = new Date().toLocaleDateString('en-US', {
           year: 'numeric', month: 'short', day: 'numeric',
           hour: '2-digit', minute: '2-digit',
