@@ -75,14 +75,24 @@
       "package.json"
     ],
     "win": {
-      "target": ["nsis"],
+      "target": ["nsis", "portable"],
       "icon": "build-resources/icon.ico",
       "signAndEditExecutable": false
     },
     "nsis": {
-      "oneClick": true,
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "DashSnap"
+      "createStartMenuShortcut": true,
+      "shortcutName": "DashSnap",
+      "installerIcon": "build-resources/icon.ico",
+      "uninstallerIcon": "build-resources/icon.ico",
+      "installerHeaderIcon": "build-resources/icon.ico",
+      "license": null,
+      "installerSidebar": null
+    },
+    "portable": {
+      "artifactName": "DashSnap-Portable.exe"
     },
     "publish": {
       "provider": "github",

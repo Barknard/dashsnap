@@ -8,6 +8,5 @@ config/settings.json
 run_log.txt
 output/
 browser_profile/
-build-resources/icon.ico
 DashSnap_Data/
 package-lock.json
