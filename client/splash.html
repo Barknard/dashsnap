@@ -49,32 +49,31 @@
 
     .loader {
       margin-top: 32px;
-      width: 120px; height: 3px;
+      width: 180px; height: 4px;
       background: #262435;
       border-radius: 2px;
       overflow: hidden;
     }
     .loader-bar {
-      width: 40%;
+      width: 0%;
       height: 100%;
       background: linear-gradient(90deg, #7C5CFC, #22D3EE);
       border-radius: 2px;
-      animation: slide 1.2s ease-in-out infinite;
+      animation: fill 6s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
     }
-    @keyframes slide {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(350%); }
+    @keyframes fill {
+      0% { width: 0%; }
+      15% { width: 25%; }
+      40% { width: 50%; }
+      65% { width: 70%; }
+      85% { width: 85%; }
+      100% { width: 95%; }
     }
 
     .status {
       margin-top: 14px;
       font-size: 11px;
       color: #4A4560;
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 0.6; }
-      50% { opacity: 1; }
     }
 
     .version {
@@ -95,7 +94,21 @@
   <h1>DashSnap</h1>
   <p class="tagline">Dashboard to Deck</p>
   <div class="loader"><div class="loader-bar"></div></div>
-  <p class="status">Loading application...</p>
-  <p class="version">v1.0.0</p>
+  <p class="status" id="status">Initializing...</p>
+  <p class="version">v1.3.0</p>
+  <script>
+    const messages = [
+      [0, 'Initializing...'],
+      [800, 'Loading modules...'],
+      [2000, 'Setting up browser...'],
+      [3500, 'Preparing workspace...'],
+      [5000, 'Almost ready...'],
+    ];
+    messages.forEach(([delay, text]) => {
+      setTimeout(() => {
+        document.getElementById('status').textContent = text;
+      }, delay);
+    });
+  </script>
 </body>
 </html>

@@ -530,10 +530,14 @@ async function downloadGitHubUpdate() {
 // ─── App lifecycle ──────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
+  // Show splash immediately, then defer heavy work so the splash paints first
   showSplash();
-  setupIPC();
-  createWindow();
-  setupAutoUpdater();
+
+  setTimeout(() => {
+    setupIPC();
+    createWindow();
+    setupAutoUpdater();
+  }, 100);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
