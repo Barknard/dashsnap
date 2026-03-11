@@ -135,8 +135,11 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
   const noFlow = !activeFlow;
 
   return (
-    <div className="flex flex-col gap-3 p-3 h-full">
+    <div className="flex flex-col h-full">
       {isRecording && <RecordingOverlay type={recordingType} />}
+
+      {/* Scrollable content area */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
 
       {/* Recording status */}
       {isRecording && (
@@ -286,11 +289,10 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
         </div>
       )}
 
-      {/* Spacer to push run footer to bottom */}
-      <div className="flex-1" />
+      </div>{/* End scrollable content area */}
 
-      {/* Run footer */}
-      <div className="border-t border-ds-border pt-3 space-y-2">
+      {/* Fixed run footer — always visible at bottom */}
+      <div className="shrink-0 border-t border-ds-border p-3 space-y-2">
         {/* Progress section */}
         <AnimatePresence>
           {runProgress && (

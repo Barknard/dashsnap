@@ -792,26 +792,30 @@ export class FlowRunner {
     screenshots?: Array<{ name: string; path: string; slideLayout?: PptxLayout }>,
   ): Promise<'success' | 'warning'> {
     const wc = this.view.webContents;
-    const waitSec = step.waitBetween != null ? (step.waitBetween / 1000) : defaults.stepWaitSeconds;
+    // Use waitBetween (default 500ms) for inter-action delays — much shorter than
+    // stepWaitSeconds so dropdown interactions don't time out between clicks
+    const interActionMs = step.waitBetween != null ? step.waitBetween : 500;
+    const interActionSec = interActionMs / 1000;
     let worstStatus: 'success' | 'warning' = 'success';
 
-    for (const action of step.actions) {
+    for (let i = 0; i < step.actions.length; i++) {
+      const action = step.actions[i];
       if (this.shouldStop) break;
+
+      console.log(`[Playback] Macro action ${i + 1}/${step.actions.length}: ${action.action} — "${action.label || ''}" selector="${action.selector || 'none'}"`);
 
       let status: 'success' | 'warning' = 'success';
 
       switch (action.action) {
         case 'click': {
-          // Same logic as executeClick
           status = await this.executeClick(
             { selector: action.selector || '', fallbackXY: action.fallbackXY, selectorStrategy: action.selectorStrategy || 'css' },
-            waitSec,
+            interActionSec,
           );
           break;
         }
 
         case 'type': {
-          // Same logic as executeType
           status = await this.executeType(
             {
               selector: action.selector || '',
@@ -821,13 +825,12 @@ export class FlowRunner {
               clearFirst: true,
               clickOffAfter: false,
             },
-            waitSec,
+            interActionSec,
           );
           break;
         }
 
         case 'select': {
-          // Same logic as executeSelect (substitute variables before passing)
           status = await this.executeSelect(
             {
               selector: action.selector || '',
@@ -836,7 +839,7 @@ export class FlowRunner {
               optionValue: this.substituteVariables(action.value || ''),
               clickOffAfter: false,
             },
-            waitSec,
+            interActionSec,
           );
           break;
         }
@@ -857,7 +860,7 @@ export class FlowRunner {
               });
             }
           }
-          await this.delay(waitSec * 1000);
+          await this.delay(interActionMs);
           break;
         }
 
@@ -885,14 +888,14 @@ export class FlowRunner {
               console.error('Macro snap failed:', err);
             }
           }
-          await this.delay(waitSec * 1000);
+          await this.delay(interActionMs);
           break;
         }
 
         case 'key': {
           status = await this.executeKeyPress(
             { selector: action.selector || '', fallbackXY: action.fallbackXY, selectorStrategy: action.selectorStrategy || 'css', keyPress: action.key || 'Enter' },
-            waitSec,
+            interActionSec,
           );
           break;
         }
