@@ -296,7 +296,7 @@ export class FlowRunner {
     if (step.selector) {
       const found = await wc.executeJavaScript(`
         (function() {
-          const el = document.querySelector('${step.selector.replace(/'/g, "\\'")}');
+          const el = document.querySelector(${JSON.stringify(step.selector)});
           if (el) { el.click(); return true; }
           return false;
         })()
@@ -314,7 +314,7 @@ export class FlowRunner {
       wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
       wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
       await this.delay(waitSeconds * 1000);
-      return 'warning'; // XY fallback used
+      return 'warning';
     }
 
     throw new Error(`Element not found: ${step.selector}`);
@@ -356,7 +356,7 @@ export class FlowRunner {
     if (step.selector) {
       const found = await wc.executeJavaScript(`
         (function() {
-          const el = document.querySelector('${step.selector.replace(/'/g, "\\'")}');
+          const el = document.querySelector(${JSON.stringify(step.selector)});
           if (el) {
             const rect = el.getBoundingClientRect();
             const evt = new MouseEvent('mouseover', { bubbles: true, clientX: rect.left + rect.width/2, clientY: rect.top + rect.height/2 });
@@ -394,9 +394,9 @@ export class FlowRunner {
     if (step.selector) {
       const found = await wc.executeJavaScript(`
         (function() {
-          const el = document.querySelector('${step.selector.replace(/'/g, "\\'")}');
+          const el = document.querySelector(${JSON.stringify(step.selector)});
           if (el && el.tagName === 'SELECT') {
-            el.value = '${step.optionValue.replace(/'/g, "\\'")}';
+            el.value = ${JSON.stringify(step.optionValue)};
             el.dispatchEvent(new Event('change', { bubbles: true }));
             return true;
           }
@@ -440,7 +440,7 @@ export class FlowRunner {
     if (step.selector) {
       const found = await wc.executeJavaScript(`
         (function() {
-          const el = document.querySelector('${step.selector.replace(/'/g, "\\'")}');
+          const el = document.querySelector(${JSON.stringify(step.selector)});
           if (el) {
             el.focus();
             ${step.clearFirst ? "el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true }));" : ''}
@@ -492,7 +492,7 @@ export class FlowRunner {
     if (step.selector) {
       const found = await wc.executeJavaScript(`
         (function() {
-          const el = document.querySelector('${step.selector.replace(/'/g, "\\'")}');
+          const el = document.querySelector(${JSON.stringify(step.selector)});
           if (el) {
             el.scrollTop = ${step.scrollTop};
             ${step.scrollLeft != null ? `el.scrollLeft = ${step.scrollLeft};` : ''}
@@ -523,7 +523,7 @@ export class FlowRunner {
     if (step.selector) {
       const found = await wc.executeJavaScript(`
         (function() {
-          const el = document.querySelector('${step.selector.replace(/'/g, "\\\\'")}');
+          const el = document.querySelector(${JSON.stringify(step.selector)});
           if (el) {
             el.focus();
             el.click();
@@ -560,7 +560,7 @@ export class FlowRunner {
     // 4. Find and click the matching result by text content
     const clicked = await wc.executeJavaScript(`
       (function() {
-        const searchText = '${searchText.replace(/'/g, "\\\\'")}';
+        const searchText = ${JSON.stringify(searchText)};
         // Look for visible elements containing the exact text
         const all = document.querySelectorAll('*');
         for (const el of all) {
@@ -650,70 +650,52 @@ export class FlowRunner {
   ): Promise<'success' | 'warning'> {
     const wc = this.view.webContents;
     const waitBetween = step.waitBetween ?? 500;
-    let usedFallback = false;
+    const waitSec = (waitBetween / 1000);
+    let worstStatus: 'success' | 'warning' = 'success';
 
     for (const action of step.actions) {
       if (this.shouldStop) break;
 
+      let status: 'success' | 'warning' = 'success';
+
       switch (action.action) {
         case 'click': {
-          const clicked = await this.clickSelector(wc, action.selector || '', action.fallbackXY);
-          if (!clicked) throw new Error(`Macro click failed: ${action.label || action.selector}`);
-          if (clicked === 'fallback') usedFallback = true;
+          // Same logic as executeClick
+          status = await this.executeClick(
+            { selector: action.selector || '', fallbackXY: action.fallbackXY, selectorStrategy: action.selectorStrategy || 'css' },
+            waitSec,
+          );
           break;
         }
 
         case 'type': {
-          const text = this.substituteVariables(action.value || '');
-          if (action.selector) {
-            const found = await wc.executeJavaScript(`
-              (function() {
-                const el = document.querySelector('${action.selector.replace(/'/g, "\\\\'")}');
-                if (el) { el.focus(); el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); return true; }
-                return false;
-              })()
-            `).catch(() => false);
-
-            if (found) {
-              for (const char of text) {
-                wc.sendInputEvent({ type: 'char', keyCode: char });
-                await this.delay(30);
-              }
-            } else if (action.fallbackXY) {
-              const [x, y] = action.fallbackXY;
-              wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
-              wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
-              await this.delay(200);
-              for (const char of text) {
-                wc.sendInputEvent({ type: 'char', keyCode: char });
-                await this.delay(30);
-              }
-              usedFallback = true;
-            }
-          }
+          // Same logic as executeType
+          status = await this.executeType(
+            {
+              selector: action.selector || '',
+              fallbackXY: action.fallbackXY,
+              selectorStrategy: action.selectorStrategy || 'css',
+              text: action.value || '',
+              clearFirst: true,
+              clickOffAfter: false,
+            },
+            waitSec,
+          );
           break;
         }
 
         case 'select': {
-          const value = this.substituteVariables(action.value || '');
-          if (action.selector) {
-            await wc.executeJavaScript(`
-              (function() {
-                const el = document.querySelector('${action.selector.replace(/'/g, "\\\\'")}');
-                if (el && el.tagName === 'SELECT') {
-                  el.value = '${value.replace(/'/g, "\\\\'")}';
-                  el.dispatchEvent(new Event('change', { bubbles: true }));
-                } else if (el) {
-                  el.click();
-                }
-              })()
-            `).catch(() => {});
-          } else if (action.fallbackXY) {
-            const [x, y] = action.fallbackXY;
-            wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
-            wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
-            usedFallback = true;
-          }
+          // Same logic as executeSelect (substitute variables before passing)
+          status = await this.executeSelect(
+            {
+              selector: action.selector || '',
+              fallbackXY: action.fallbackXY,
+              selectorStrategy: action.selectorStrategy || 'css',
+              optionValue: this.substituteVariables(action.value || ''),
+              clickOffAfter: false,
+            },
+            waitSec,
+          );
           break;
         }
 
@@ -724,21 +706,23 @@ export class FlowRunner {
                 `window.scrollTo(${action.scrollTarget.x}, ${action.scrollTarget.y})`
               );
             } else if (action.selector) {
-              await wc.executeJavaScript(`
-                (function() {
-                  const el = document.querySelector('${action.selector.replace(/'/g, "\\\\'")}');
-                  if (el) { el.scrollTop = ${action.scrollTarget.y}; el.scrollLeft = ${action.scrollTarget.x}; }
-                })()
-              `).catch(() => {});
+              status = await this.executeScrollElement({
+                selector: action.selector,
+                fallbackXY: action.fallbackXY,
+                selectorStrategy: action.selectorStrategy || 'css',
+                scrollTop: action.scrollTarget.y,
+                scrollLeft: action.scrollTarget.x,
+              });
             }
           }
+          await this.delay(waitBetween);
           break;
         }
 
         case 'snap': {
           if (action.snapRegion && outputDir && screenshots) {
             try {
-              const image = await this.view.webContents.capturePage({
+              const image = await wc.capturePage({
                 x: action.snapRegion.x,
                 y: action.snapRegion.y,
                 width: action.snapRegion.width,
@@ -759,14 +743,15 @@ export class FlowRunner {
               console.error('Macro snap failed:', err);
             }
           }
+          await this.delay(waitBetween);
           break;
         }
       }
 
-      await this.delay(waitBetween);
+      if (status === 'warning') worstStatus = 'warning';
     }
 
-    return usedFallback ? 'warning' : 'success';
+    return worstStatus;
   }
 
   private async clickSelector(
@@ -777,7 +762,7 @@ export class FlowRunner {
     if (selector) {
       const found = await wc.executeJavaScript(`
         (function() {
-          const el = document.querySelector('${selector.replace(/'/g, "\\\\'")}');
+          const el = document.querySelector(${JSON.stringify(selector)});
           if (el) { el.click(); return true; }
           return false;
         })()

@@ -18,7 +18,7 @@ import { useFlowStore } from './stores/flowStore';
 import { useAppStore } from './stores/appStore';
 import { recorder, app as appIpc, flow as flowIpc } from './lib/ipc';
 import { generateId } from './lib/utils';
-import type { FlowStep, ClickStep, SnapStep, HoverStep, SelectStep, TypeStep, ScrollElementStep, SearchSelectStep, FilterStep, MacroStep, MacroAction, RunProgress } from '@shared/types';
+import type { FlowStep, ClickStep, SnapStep, HoverStep, SelectStep, TypeStep, ScrollElementStep, SearchSelectStep, FilterStep, MacroStep, MacroAction, NavigateStep, RunProgress } from '@shared/types';
 import { toast } from 'sonner';
 
 export default function App() {
@@ -219,12 +219,24 @@ export default function App() {
       setNamePrompt({ open: true, defaultName: step.label, step });
     };
 
-    const handleMacroRecorded = (actions: Array<{ selector?: string; selectorStrategy?: string; fallbackXY?: [number, number]; label?: string; action: string; value?: string; scrollTarget?: { x: number; y: number; isPage: boolean }; elementMeta?: { tagName: string; inputType?: string; placeholder?: string; options?: string[] } }>) => {
+    const handleMacroRecorded = (actions: Array<{ selector?: string; selectorStrategy?: string; fallbackXY?: [number, number]; label?: string; action: string; value?: string; scrollTarget?: { x: number; y: number; isPage: boolean }; elementMeta?: { tagName: string; inputType?: string; placeholder?: string; options?: string[] } }>, startUrl: string) => {
       stopRecording();
 
       if (!actions || actions.length === 0) {
         toast.error('Macro recording empty — no actions captured');
         return;
+      }
+
+      // Auto-insert a NAVIGATE step so playback starts on the same page
+      if (startUrl && startUrl !== 'about:blank') {
+        const navStep: NavigateStep = {
+          type: 'NAVIGATE',
+          id: generateId('step'),
+          label: `Navigate: ${new URL(startUrl).hostname}`,
+          url: startUrl,
+        };
+        addStep(navStep);
+        toast.success(`Recorded: ${navStep.label}`);
       }
 
       // Auto-detect which actions could use variables

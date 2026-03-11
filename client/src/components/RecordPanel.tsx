@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Camera, Timer, Globe, ArrowDownToLine,
-  Plus, Scissors, Clapperboard,
+  Timer, Globe, ArrowDownToLine,
+  Plus, Clapperboard,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -36,18 +36,6 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
     if (!activeFlow) return;
     startRecording('macro');
     recorder.startMacro();
-  };
-
-  const handleRecordSnap = () => {
-    if (!activeFlow) return;
-    startRecording('snap');
-    recorder.startSnap();
-  };
-
-  const handleRecordScreenshot = () => {
-    if (!activeFlow) return;
-    startRecording('screenshot');
-    recorder.startScreenshot();
   };
 
   const handleAddWait = () => {
@@ -110,34 +98,23 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
         </motion.div>
       )}
 
-      {/* Main recording actions */}
+      {/* Main recording action */}
       <div>
-        <h3 className="text-sm font-semibold text-ds-text-dim uppercase tracking-wider mb-2 px-1">
-          Record Actions
-        </h3>
-        <div className="grid grid-cols-3 gap-2">
-          {([
-            { onClick: handleRecordMacro, icon: Clapperboard, label: 'Record', desc: 'Click, scroll, type', color: 'ds-accent' },
-            { onClick: handleRecordSnap, icon: Camera, label: 'Snap Element', desc: 'Pick element', color: 'ds-emerald' },
-            { onClick: handleRecordScreenshot, icon: Scissors, label: 'Screenshot', desc: 'Draw region', color: 'ds-cyan' },
-          ] as const).map(({ onClick, icon: BtnIcon, label, desc, color }) => (
-            <motion.div key={label} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <button
-                onClick={onClick}
-                disabled={noFlow || isRecording}
-                className={`w-full h-[90px] flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl bg-gradient-to-br from-${color}/20 to-${color}/5 border border-${color}/25 hover:border-${color}/50 hover:from-${color}/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed group`}
-              >
-                <div className={`flex items-center justify-center w-8 h-8 rounded-xl bg-${color}/20 group-hover:bg-${color}/30 transition-colors`}>
-                  <BtnIcon className={`w-3.5 h-3.5 text-${color}`} />
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] font-semibold text-ds-text">{label}</p>
-                  <p className="text-[9px] text-ds-text-dim">{desc}</p>
-                </div>
-              </button>
-            </motion.div>
-          ))}
-        </div>
+        <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
+          <button
+            onClick={handleRecordMacro}
+            disabled={noFlow || isRecording}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gradient-to-br from-ds-accent/20 to-ds-accent/5 border border-ds-accent/25 hover:border-ds-accent/50 hover:from-ds-accent/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed group"
+          >
+            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-ds-accent/20 group-hover:bg-ds-accent/30 transition-colors">
+              <Clapperboard className="w-5 h-5 text-ds-accent" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-ds-text">Record</p>
+              <p className="text-[10px] text-ds-text-dim">Click, scroll, type, snap — all in one session</p>
+            </div>
+          </button>
+        </motion.div>
       </div>
 
       {/* Add Wait */}

@@ -147,7 +147,7 @@ export const recorder = {
     label?: string; action: string; value?: string;
     scrollTarget?: { x: number; y: number; isPage: boolean };
     elementMeta?: { tagName: string; inputType?: string; placeholder?: string; options?: string[] };
-  }>) => void) => {
+  }>, startUrl: string) => void) => {
     if (!isElectron) return;
     window.dashsnap!.on('recorder:macro-recorded', cb as (...args: unknown[]) => void);
   },

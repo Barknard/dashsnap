@@ -92,8 +92,14 @@ export function RecordingOverlay({ type }: RecordingOverlayProps) {
           transition={{ delay: 0.2 }}
           className="absolute top-16 left-3 right-3 pointer-events-none"
         >
-          <div className="bg-ds-surface/95 border border-ds-accent/30 rounded-xl p-4 shadow-2xl backdrop-blur-md space-y-3">
-            <p className="text-xs font-bold text-ds-accent uppercase tracking-wider">Recording Controls</p>
+          <div className="bg-ds-red/[0.06] border-2 border-dashed border-ds-red/40 rounded-xl p-4 shadow-2xl backdrop-blur-md space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-ds-red opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-ds-red" />
+              </span>
+              <p className="text-xs font-bold text-ds-red uppercase tracking-wider">Recording — Hotkey Reference</p>
+            </div>
 
             <div className="space-y-2">
               <div className="flex items-start gap-3">

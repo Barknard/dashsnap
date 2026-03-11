@@ -1000,11 +1000,12 @@ export class Recorder {
           const actions = await this.view.webContents.executeJavaScript(
             'JSON.parse(JSON.stringify(window.__dashsnap_macro_actions))'
           );
+          const startUrl = this.view.webContents.getURL();
           await this.view.webContents.executeJavaScript(`
             window.__dashsnap_macro_done = false;
             window.__dashsnap_macro_actions = [];
           `);
-          this.window.webContents.send('recorder:macro-recorded', actions);
+          this.window.webContents.send('recorder:macro-recorded', actions, startUrl);
         }
       } catch {
         // Page may have navigated
