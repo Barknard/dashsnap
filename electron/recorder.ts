@@ -859,17 +859,16 @@ const MACRO_OVERLAY_JS = `
     return el; // give up, use original
   }
 
-  function onClick(e) {
-    var rawEl = e.target;
-    if (!rawEl || rawEl === highlight) return;
-    // Ignore clicks while text prompt is open
+  // Track last recorded action time+position to deduplicate click vs mousedown
+  var lastRecordedAt = 0;
+  var lastRecordedXY = '';
+
+  function recordClickAction(rawEl, eventType) {
+    if (!rawEl || rawEl === highlight || rawEl === tooltip) return;
     if (promptOverlay) return;
-    // Ignore clicks while automated typing is in progress
     if (window.__dashsnap_macro_typing) return;
-    // Done button or banner click = finish recording
+    // Done button or banner
     if (rawEl.id === '__ds_done_btn' || rawEl === banner || rawEl.closest('#__dashsnap_macro_banner')) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
       if (window.__dashsnap_macro_actions.length > 0) {
         window.__dashsnap_macro_done = true;
         cleanup();
@@ -881,12 +880,16 @@ const MACRO_OVERLAY_JS = `
       return;
     }
 
-    // Walk up to find the real interactive element (not a generic div/span wrapper)
     const el = findInteractiveAncestor(rawEl);
-    // Let click go through to the page
+    const rect = el.getBoundingClientRect();
+    var xyKey = Math.round(rect.left) + ',' + Math.round(rect.top);
+    var now = Date.now();
+
+    // Deduplicate: if same position was recorded in the last 500ms, skip
+    if (xyKey === lastRecordedXY && now - lastRecordedAt < 500) return;
+
     const { selector, strategy } = getBestSelector(el);
     const label = getLabel(el);
-    const rect = el.getBoundingClientRect();
     const meta = getElementMeta(el);
     const actionType = isTypeable(el) ? 'type' : (el.tagName === 'SELECT' ? 'select' : 'click');
 
@@ -900,20 +903,41 @@ const MACRO_OVERLAY_JS = `
       elementMeta: meta,
     };
 
-    // If typeable, show a prompt for the user to enter the text value
     if (actionType === 'type') {
       flashElement(el);
-      // Show inline text prompt
       showTextPrompt(el, actionObj);
-      return; // Don't push yet — the prompt callback will push it
+      return;
     }
 
+    lastRecordedAt = now;
+    lastRecordedXY = xyKey;
+
     window.__dashsnap_macro_actions.push(actionObj);
-    // Immediately log action so main process can capture it via console-message
-    // (prevents loss when click triggers navigation before poll sync)
     console.log('__DASHSNAP_ACTION__' + JSON.stringify(actionObj));
     flashElement(el);
     updateBanner();
+  }
+
+  function onClick(e) {
+    e.stopPropagation(); // Don't let page handlers interfere, but don't preventDefault
+    recordClickAction(e.target, 'click');
+  }
+
+  // Fallback: capture mousedown for dropdowns/popups that suppress click events
+  function onMouseDown(e) {
+    // Only record left clicks
+    if (e.button !== 0) return;
+    // Skip overlay elements
+    if (e.target === banner || e.target === highlight || e.target === tooltip) return;
+    if (e.target && e.target.closest && e.target.closest('#__dashsnap_macro_banner')) return;
+    if (e.target && e.target.closest && e.target.closest('#__dashsnap_text_prompt')) return;
+    // The click handler will fire ~100ms later for normal clicks.
+    // For suppressed clicks (dropdown options), only mousedown fires.
+    // Use a short delay to let click handler take priority via dedup.
+    var target = e.target;
+    setTimeout(function() {
+      recordClickAction(target, 'mousedown');
+    }, 150);
   }
 
   // Capture select/dropdown changes
@@ -1029,6 +1053,7 @@ const MACRO_OVERLAY_JS = `
 
   document.addEventListener('mousemove', onMouseMove, true);
   document.addEventListener('click', onClick, true);
+  document.addEventListener('mousedown', onMouseDown, true);
   document.addEventListener('keydown', onKeyDown, true);
   document.addEventListener('change', onSelectChange, true);
   document.addEventListener('scroll', onScroll, true);
@@ -1039,6 +1064,7 @@ const MACRO_OVERLAY_JS = `
     clearTimeout(scrollTimer);
     document.removeEventListener('mousemove', onMouseMove, true);
     document.removeEventListener('click', onClick, true);
+    document.removeEventListener('mousedown', onMouseDown, true);
     document.removeEventListener('keydown', onKeyDown, true);
     document.removeEventListener('change', onSelectChange, true);
     document.removeEventListener('scroll', onScroll, true);

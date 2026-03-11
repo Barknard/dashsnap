@@ -237,31 +237,104 @@ export default function App() {
         addStep(navStep);
       }
 
-      // Store as a single MACRO step — keeps actions together with short
-      // inter-action delays (500ms default) instead of full stepWaitSeconds
-      const macroActions = actions.map(a => ({
-        selector: a.selector,
-        fallbackXY: a.fallbackXY,
-        selectorStrategy: a.selectorStrategy,
-        label: a.label,
-        action: a.action as 'click' | 'type' | 'select' | 'scroll' | 'snap' | 'key',
-        key: (a as any).key,
-        value: a.value,
-        scrollTarget: a.scrollTarget,
-        snapRegion: a.snapRegion,
-        slideLayout: (a as any).slideLayout,
-        elementMeta: a.elementMeta,
-      }));
+      // Convert each recorded action into an individual flow step
+      const groupId = `rec_${Date.now()}`;
+      for (const action of actions) {
+        const selectorStrategy = (action.selectorStrategy || 'css') as ClickStep['selectorStrategy'];
+        let step: FlowStep;
 
-      const macroStep: FlowStep = {
-        type: 'MACRO',
-        id: generateId('step'),
-        label: `Macro (${actions.length} actions)`,
-        actions: macroActions,
-      };
-      addStep(macroStep);
+        switch (action.action) {
+          case 'click':
+            step = {
+              type: 'CLICK',
+              id: generateId('step'),
+              label: action.label || 'Click element',
+              selector: action.selector || '',
+              selectorStrategy,
+              fallbackXY: action.fallbackXY,
+              group: groupId,
+            } as FlowStep;
+            break;
+          case 'type':
+            step = {
+              type: 'TYPE',
+              id: generateId('step'),
+              label: action.value ? `Type: "${action.value.substring(0, 30)}"` : `Type in: ${action.label || 'input'}`,
+              selector: action.selector || '',
+              selectorStrategy,
+              fallbackXY: action.fallbackXY,
+              text: action.value || '',
+              clearFirst: true,
+              clickOffAfter: false,
+              group: groupId,
+            } as FlowStep;
+            break;
+          case 'select':
+            step = {
+              type: 'SELECT',
+              id: generateId('step'),
+              label: `Select: ${action.label || 'dropdown'}`,
+              selector: action.selector || '',
+              selectorStrategy,
+              fallbackXY: action.fallbackXY,
+              optionValue: action.value || '',
+              clickOffAfter: false,
+              group: groupId,
+            } as FlowStep;
+            break;
+          case 'scroll':
+            if (action.scrollTarget?.isPage) {
+              step = {
+                type: 'SCROLL',
+                id: generateId('step'),
+                label: action.label || `Scroll to (${action.scrollTarget.x}, ${action.scrollTarget.y})`,
+                x: action.scrollTarget.x,
+                y: action.scrollTarget.y,
+                group: groupId,
+              } as FlowStep;
+            } else {
+              step = {
+                type: 'SCROLL_ELEMENT',
+                id: generateId('step'),
+                label: action.label || 'Scroll element',
+                selector: action.selector || '',
+                selectorStrategy,
+                fallbackXY: action.fallbackXY,
+                scrollTop: action.scrollTarget?.y ?? 0,
+                scrollLeft: action.scrollTarget?.x ?? 0,
+                group: groupId,
+              } as FlowStep;
+            }
+            break;
+          case 'snap':
+            step = {
+              type: 'SNAP',
+              id: generateId('step'),
+              label: action.label || 'Screenshot',
+              region: action.snapRegion || { x: 0, y: 0, width: 100, height: 100 },
+              group: groupId,
+            } as FlowStep;
+            break;
+          case 'key':
+            step = {
+              type: 'CLICK',
+              id: generateId('step'),
+              label: action.label || `Press ${(action as any).key || 'Enter'}`,
+              selector: action.selector || '',
+              selectorStrategy,
+              fallbackXY: action.fallbackXY,
+              keyPress: (action as any).key || 'Enter',
+              group: groupId,
+            } as FlowStep;
+            break;
+          default:
+            continue;
+        }
 
-      toast.success(`Recorded ${actions.length} actions`);
+        addStep(step);
+      }
+
+      toast.success(`Recorded ${actions.length} steps`);
     };
 
     const handleCancelled = () => {

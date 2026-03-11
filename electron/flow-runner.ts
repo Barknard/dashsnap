@@ -409,30 +409,50 @@ export class FlowRunner {
     throw new Error(`Element not found: ${step.selector}`);
   }
 
-  /** Find element by selector (CSS or xpath:) and call el.click() on it */
+  /**
+   * Find element by selector (CSS or xpath:) and click it using multiple methods:
+   * 1. el.click() — standard DOM click
+   * 2. Dispatch mousedown + mouseup + click events — catches handlers listening
+   *    for mousedown/pointerdown (common in custom dropdown/popup components)
+   * This ensures clicks work across different UI frameworks and event patterns.
+   */
   private async clickElementBySelector(wc: Electron.WebContents, selector: string): Promise<boolean> {
+    const clickScript = `
+      (function() {
+        var el = __DS_FIND_EL__;
+        if (!el) return null;
+        el.scrollIntoView({ block: 'center', behavior: 'instant' });
+        var r = el.getBoundingClientRect();
+        var cx = r.left + r.width / 2;
+        var cy = r.top + r.height / 2;
+        // Fire full event sequence: pointerdown → mousedown → pointerup → mouseup → click
+        var opts = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy, button: 0 };
+        el.dispatchEvent(new PointerEvent('pointerdown', opts));
+        el.dispatchEvent(new MouseEvent('mousedown', opts));
+        el.dispatchEvent(new PointerEvent('pointerup', opts));
+        el.dispatchEvent(new MouseEvent('mouseup', opts));
+        el.click();
+        return { x: Math.round(cx), y: Math.round(cy), tag: el.tagName, text: (el.textContent || '').trim().substring(0, 40) };
+      })()
+    `;
+
+    let findExpr: string;
     if (selector.startsWith('xpath:')) {
       const xpath = selector.substring(6);
-      return wc.executeJavaScript(`
-        (function() {
-          var result = document.evaluate(${JSON.stringify(xpath)}, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-          var el = result.singleNodeValue;
-          if (!el) return false;
-          el.scrollIntoView({ block: 'center', behavior: 'instant' });
-          el.click();
-          return true;
-        })()
-      `).catch(() => false);
+      findExpr = `(function() { var r = document.evaluate(${JSON.stringify(xpath)}, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null); return r.singleNodeValue; })()`;
+    } else {
+      findExpr = `document.querySelector(${JSON.stringify(selector)})`;
     }
-    return wc.executeJavaScript(`
-      (function() {
-        var el = document.querySelector(${JSON.stringify(selector)});
-        if (!el) return false;
-        el.scrollIntoView({ block: 'center', behavior: 'instant' });
-        el.click();
-        return true;
-      })()
-    `).catch(() => false);
+
+    const result = await wc.executeJavaScript(
+      clickScript.replace('__DS_FIND_EL__', findExpr)
+    ).catch(() => null);
+
+    if (result) {
+      console.log(`[Playback] clickElement: hit <${result.tag}> "${result.text}" at (${result.x}, ${result.y})`);
+      return true;
+    }
+    return false;
   }
 
   private async executeKeyPress(
