@@ -383,12 +383,10 @@ export class FlowRunner {
     if (step.selector) {
       for (let attempt = 0; attempt < 5; attempt++) {
         console.log(`[Playback] Click: finding "${step.selector}" (attempt ${attempt + 1}/5, strategy: ${step.selectorStrategy})`);
-        const rect = await this.findElement(wc, step.selector);
+        const clicked = await this.clickElementBySelector(wc, step.selector);
 
-        if (rect) {
-          console.log(`[Playback] Click: found at (${rect.x}, ${rect.y}) — <${rect.tag}> "${rect.text}"`);
-          wc.sendInputEvent({ type: 'mouseDown', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
-          wc.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
+        if (clicked) {
+          console.log(`[Playback] Click: success via el.click()`);
           await this.waitAfterClick(wc, waitSeconds);
           return 'success';
         }
@@ -409,6 +407,32 @@ export class FlowRunner {
     }
 
     throw new Error(`Element not found: ${step.selector}`);
+  }
+
+  /** Find element by selector (CSS or xpath:) and call el.click() on it */
+  private async clickElementBySelector(wc: Electron.WebContents, selector: string): Promise<boolean> {
+    if (selector.startsWith('xpath:')) {
+      const xpath = selector.substring(6);
+      return wc.executeJavaScript(`
+        (function() {
+          var result = document.evaluate(${JSON.stringify(xpath)}, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+          var el = result.singleNodeValue;
+          if (!el) return false;
+          el.scrollIntoView({ block: 'center', behavior: 'instant' });
+          el.click();
+          return true;
+        })()
+      `).catch(() => false);
+    }
+    return wc.executeJavaScript(`
+      (function() {
+        var el = document.querySelector(${JSON.stringify(selector)});
+        if (!el) return false;
+        el.scrollIntoView({ block: 'center', behavior: 'instant' });
+        el.click();
+        return true;
+      })()
+    `).catch(() => false);
   }
 
   private async executeKeyPress(
@@ -886,11 +910,9 @@ export class FlowRunner {
     fallbackXY?: [number, number],
   ): Promise<'ok' | 'fallback' | false> {
     if (selector) {
-      const rect = await this.findElement(wc, selector);
-      if (rect) {
-        console.log(`[Playback] clickSelector: found "${selector}" at (${rect.x}, ${rect.y})`);
-        wc.sendInputEvent({ type: 'mouseDown', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
-        wc.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
+      const clicked = await this.clickElementBySelector(wc, selector);
+      if (clicked) {
+        console.log(`[Playback] clickSelector: found and clicked "${selector}"`);
         return 'ok';
       }
       console.log(`[Playback] clickSelector: "${selector}" not found`);
