@@ -284,7 +284,7 @@ function setupIPC() {
   ipcMain.on('recorder:start-type', () => recorder?.startTypeRecording());
   ipcMain.on('recorder:start-scroll-element', () => recorder?.startScrollElementRecording());
   ipcMain.on('recorder:start-search-select', () => recorder?.startClickRecording());
-  ipcMain.on('recorder:start-filter', () => recorder?.startClickRecording());
+  ipcMain.on('recorder:start-filter', () => recorder?.startFilterRecording());
   ipcMain.on('recorder:stop', () => recorder?.stop());
 
   // Flow management

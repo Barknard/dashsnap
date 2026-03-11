@@ -159,17 +159,6 @@ export default function App() {
           clearFirst: true,
           clickOffAfter: true,
         } as SearchSelectStep;
-      } else if (currentRecordingType === 'filter') {
-        step = {
-          type: 'FILTER',
-          id: generateId('step'),
-          label: `Filter: ${data.label || 'element'}`,
-          selector: data.selector,
-          selectorStrategy,
-          fallbackXY: data.xy,
-          optionTexts: [],
-          clickOffAfter: true,
-        } as FilterStep;
       } else {
         step = {
           type: 'CLICK',
@@ -197,6 +186,39 @@ export default function App() {
       setNamePrompt({ open: true, defaultName: step.label, step });
     };
 
+    const handleFilterRecorded = (data: {
+      trigger: { selector: string; label: string; strategy: string; xy: [number, number] } | null;
+      options: Array<{ selector: string; label: string; strategy: string; xy: [number, number] }>;
+      apply: { selector: string; label: string; strategy: string; xy: [number, number] } | null;
+    }) => {
+      stopRecording();
+
+      if (!data.trigger) {
+        toast.error('Filter recording incomplete — no trigger recorded');
+        return;
+      }
+
+      const step: FilterStep = {
+        type: 'FILTER',
+        id: generateId('step'),
+        label: `Filter: ${data.trigger.label || 'element'} (${data.options.length} option${data.options.length !== 1 ? 's' : ''})`,
+        selector: data.trigger.selector,
+        selectorStrategy: data.trigger.strategy as FilterStep['selectorStrategy'],
+        fallbackXY: data.trigger.xy,
+        optionSelectors: data.options.map(o => ({
+          selector: o.selector,
+          fallbackXY: o.xy,
+          label: o.label,
+        })),
+        applySelector: data.apply?.selector || undefined,
+        applyFallbackXY: data.apply?.xy || undefined,
+        clickOffAfter: true,
+      };
+
+      setNameInput(step.label);
+      setNamePrompt({ open: true, defaultName: step.label, step });
+    };
+
     const handleCancelled = () => {
       stopRecording();
       toast('Recording cancelled');
@@ -204,11 +226,13 @@ export default function App() {
 
     recorder.onElementPicked(handleElementPicked);
     recorder.onRegionSelected(handleRegionSelected);
+    recorder.onFilterRecorded(handleFilterRecorded);
     recorder.onCancelled(handleCancelled);
 
     return () => {
       recorder.offElementPicked(handleElementPicked as (...args: unknown[]) => void);
       recorder.offRegionSelected(handleRegionSelected as (...args: unknown[]) => void);
+      recorder.offFilterRecorded(handleFilterRecorded as (...args: unknown[]) => void);
     };
   }, [addStep, stopRecording, setActiveTab]);
 

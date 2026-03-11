@@ -98,6 +98,12 @@ export interface SearchSelectStep {
   clickOffAfter?: boolean;
 }
 
+export interface FilterOptionSelector {
+  selector: string;
+  fallbackXY?: [number, number];
+  label?: string;
+}
+
 export interface FilterStep {
   type: 'FILTER';
   id: string;
@@ -105,8 +111,9 @@ export interface FilterStep {
   selector: string;          // the filter trigger selector (opens the filter)
   fallbackXY?: [number, number];
   selectorStrategy: 'data-attr' | 'aria-label' | 'text' | 'css-combo' | 'xy-position';
-  optionTexts: string[];     // text labels of options to click
-  applySelector?: string;    // optional apply button; if empty, re-clicks the trigger
+  optionSelectors: FilterOptionSelector[];  // recorded option element selectors
+  applySelector?: string;       // apply button selector; if empty, re-clicks trigger
+  applyFallbackXY?: [number, number];
   clickOffAfter?: boolean;
 }
 

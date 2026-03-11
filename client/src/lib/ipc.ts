@@ -126,6 +126,18 @@ export const recorder = {
     if (!isElectron) return;
     window.dashsnap!.off('recorder:region-selected', cb);
   },
+  onFilterRecorded: (cb: (data: {
+    trigger: { selector: string; label: string; strategy: string; xy: [number, number] } | null;
+    options: Array<{ selector: string; label: string; strategy: string; xy: [number, number] }>;
+    apply: { selector: string; label: string; strategy: string; xy: [number, number] } | null;
+  }) => void) => {
+    if (!isElectron) return;
+    window.dashsnap!.on('recorder:filter-recorded', cb as (...args: unknown[]) => void);
+  },
+  offFilterRecorded: (cb: (...args: unknown[]) => void) => {
+    if (!isElectron) return;
+    window.dashsnap!.off('recorder:filter-recorded', cb);
+  },
   onCancelled: (cb: () => void) => {
     if (!isElectron) return;
     window.dashsnap!.on('recorder:cancelled', cb as (...args: unknown[]) => void);

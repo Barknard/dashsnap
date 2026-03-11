@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('dashsnap', {
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     const allowedOn = [
       'browser:url-changed', 'browser:title-changed', 'browser:loading',
-      'recorder:element-picked', 'recorder:region-selected', 'recorder:cancelled',
+      'recorder:element-picked', 'recorder:region-selected', 'recorder:filter-recorded', 'recorder:cancelled',
       'flow:progress',
       'app:update-checking', 'app:update-available', 'app:update-not-available',
       'app:update-download-progress', 'app:update-downloaded', 'app:update-download-complete',

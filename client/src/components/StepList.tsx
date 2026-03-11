@@ -47,7 +47,7 @@ function stepDetail(step: FlowStep): string {
     case 'TYPE': return `"${truncate(step.text, 30)}"`;
     case 'SCROLL_ELEMENT': return `scrollTop: ${step.scrollTop}`;
     case 'SEARCH_SELECT': return `"${truncate(step.searchText, 30)}"`;
-    case 'FILTER': return `${step.optionTexts?.length || 0} option(s)`;
+    case 'FILTER': return `${step.optionSelectors?.length || 0} option(s)${step.applySelector ? ' + apply' : ' → re-click trigger'}`;
     default: return '';
   }
 }

@@ -291,6 +291,184 @@ const SNAP_OVERLAY_JS = `
 })();
 `;
 
+// ─── Filter multi-phase recording overlay ────────────────────────────────────
+// Unlike the click overlay, this lets clicks go through to the page so the user
+// actually opens the filter, selects options, etc. while we record each element.
+const FILTER_OVERLAY_JS = `
+(function() {
+  if (window.__dashsnap_filter_active) return;
+  window.__dashsnap_filter_active = true;
+  window.__dashsnap_filter_done = false;
+  window.__dashsnap_filter_cancelled = false;
+  window.__dashsnap_filter_phase = 'trigger';
+  window.__dashsnap_filter_results = { trigger: null, options: [], apply: null };
+
+  const getBestSelector = ${/* reuse the same function inline */ ''}(function() {
+    return function getBestSelector(el) {
+      for (const attr of el.attributes) {
+        if (attr.name.startsWith('data-') && attr.name !== 'data-reactid') {
+          const sel = el.tagName.toLowerCase() + '[' + attr.name + '="' + attr.value + '"]';
+          if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'data-attr' };
+        }
+      }
+      const ariaLabel = el.getAttribute('aria-label');
+      if (ariaLabel) {
+        const sel = '[aria-label="' + ariaLabel.replace(/"/g, '\\\\\\\\"') + '"]';
+        if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'aria-label' };
+      }
+      if (el.id && document.querySelectorAll('#' + CSS.escape(el.id)).length === 1) {
+        return { selector: '#' + CSS.escape(el.id), strategy: 'id' };
+      }
+      const text = (el.textContent || '').trim();
+      if (text && text.length < 50) {
+        const role = el.getAttribute('role');
+        if (role) {
+          const sel = '[role="' + role + '"]';
+          const matches = [...document.querySelectorAll(sel)].filter(e => (e.textContent||'').trim() === text);
+          if (matches.length === 1) return { selector: sel, strategy: 'text' };
+        }
+      }
+      if (el.className && typeof el.className === 'string') {
+        const classes = el.className.split(/\\s+/).filter(c => c && !c.startsWith('__')).slice(0, 2);
+        if (classes.length > 0) {
+          const sel = el.tagName.toLowerCase() + '.' + classes.join('.');
+          if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'css-combo' };
+        }
+      }
+      return { selector: '', strategy: 'xy-position' };
+    };
+  })();
+
+  function getLabel(el) {
+    const ariaLabel = el.getAttribute('aria-label');
+    if (ariaLabel) return ariaLabel;
+    const text = (el.textContent || '').trim().substring(0, 30);
+    return text || el.tagName.toLowerCase();
+  }
+
+  // Instruction banner — sits at top, pointer-events: auto so Enter works
+  const banner = document.createElement('div');
+  banner.id = '__dashsnap_filter_banner';
+  banner.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:13px system-ui;padding:10px 20px;border-radius:10px;border:2px solid #F59E0B;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,0.4);display:flex;align-items:center;gap:10px;';
+  document.body.appendChild(banner);
+
+  // Highlight overlay (pointer-events: none so clicks go through)
+  const highlight = document.createElement('div');
+  highlight.id = '__dashsnap_filter_highlight';
+  highlight.style.cssText = 'position:fixed;z-index:2147483646;border:2px solid #F59E0B;background:rgba(245,158,11,0.12);border-radius:3px;pointer-events:none;display:none;transition:all 0.05s ease;';
+  document.body.appendChild(highlight);
+
+  // Flash element on record
+  function flashElement(el) {
+    const flash = document.createElement('div');
+    flash.style.cssText = 'position:fixed;z-index:2147483645;background:rgba(34,211,238,0.3);border:2px solid #22D3EE;border-radius:3px;pointer-events:none;transition:opacity 0.5s;';
+    const rect = el.getBoundingClientRect();
+    flash.style.left = rect.left + 'px';
+    flash.style.top = rect.top + 'px';
+    flash.style.width = rect.width + 'px';
+    flash.style.height = rect.height + 'px';
+    document.body.appendChild(flash);
+    setTimeout(() => { flash.style.opacity = '0'; }, 100);
+    setTimeout(() => flash.remove(), 600);
+  }
+
+  const phases = {
+    trigger: '<span style="color:#F59E0B;font-weight:700">Step 1/3</span> — Click the filter to <b>open</b> it',
+    options: '<span style="color:#F59E0B;font-weight:700">Step 2/3</span> — Click options to select · <kbd style="background:#333;padding:2px 6px;border-radius:3px;font-size:11px">Enter</kbd> when done',
+    apply:   '<span style="color:#F59E0B;font-weight:700">Step 3/3</span> — Click <b>apply</b> button · <kbd style="background:#333;padding:2px 6px;border-radius:3px;font-size:11px">Enter</kbd> to re-click trigger instead',
+  };
+
+  function updateBanner() {
+    banner.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;animation:pulse 1s infinite;display:inline-block"></span> ' + phases[window.__dashsnap_filter_phase];
+  }
+  updateBanner();
+
+  let lastEl = null;
+  function onMouseMove(e) {
+    const el = e.target;
+    if (!el || el === banner || el === highlight) return;
+    if (el === lastEl) return;
+    lastEl = el;
+    const rect = el.getBoundingClientRect();
+    highlight.style.display = 'block';
+    highlight.style.left = rect.left + 'px';
+    highlight.style.top = rect.top + 'px';
+    highlight.style.width = rect.width + 'px';
+    highlight.style.height = rect.height + 'px';
+  }
+
+  function onClick(e) {
+    // DON'T block the event — let clicks go through to the page
+    const el = e.target;
+    if (!el || el === banner || el === highlight) return;
+
+    const { selector, strategy } = getBestSelector(el);
+    const label = getLabel(el);
+    const rect = el.getBoundingClientRect();
+    const data = {
+      selector: selector,
+      strategy: strategy,
+      label: label,
+      xy: [Math.round(rect.left + rect.width/2), Math.round(rect.top + rect.height/2)],
+    };
+
+    flashElement(el);
+
+    switch (window.__dashsnap_filter_phase) {
+      case 'trigger':
+        window.__dashsnap_filter_results.trigger = data;
+        window.__dashsnap_filter_phase = 'options';
+        updateBanner();
+        break;
+      case 'options':
+        window.__dashsnap_filter_results.options.push(data);
+        break;
+      case 'apply':
+        window.__dashsnap_filter_results.apply = data;
+        window.__dashsnap_filter_done = true;
+        cleanup();
+        break;
+    }
+  }
+
+  function onKeyDown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (window.__dashsnap_filter_phase === 'options') {
+        if (window.__dashsnap_filter_results.options.length === 0) return; // must pick at least one
+        window.__dashsnap_filter_phase = 'apply';
+        updateBanner();
+      } else if (window.__dashsnap_filter_phase === 'apply') {
+        // Skip apply — will re-click trigger
+        window.__dashsnap_filter_done = true;
+        cleanup();
+      }
+    }
+    if (e.key === 'Escape') {
+      window.__dashsnap_filter_cancelled = true;
+      cleanup();
+    }
+  }
+
+  // Capture phase for mousemove/keydown, but NOT blocking clicks
+  document.addEventListener('mousemove', onMouseMove, true);
+  document.addEventListener('click', onClick, true);
+  document.addEventListener('keydown', onKeyDown, true);
+
+  function cleanup() {
+    document.removeEventListener('mousemove', onMouseMove, true);
+    document.removeEventListener('click', onClick, true);
+    document.removeEventListener('keydown', onKeyDown, true);
+    banner.remove();
+    highlight.remove();
+    window.__dashsnap_filter_active = false;
+  }
+
+  window.__dashsnap_filter_cleanup = cleanup;
+})();
+`;
+
 export class Recorder {
   private view: BrowserView;
   private window: BrowserWindow;
@@ -339,6 +517,12 @@ export class Recorder {
     this.pollForClickResult();
   }
 
+  async startFilterRecording() {
+    this.stopPolling();
+    await this.view.webContents.executeJavaScript(FILTER_OVERLAY_JS);
+    this.pollForFilterResult();
+  }
+
   async startScreenshotRecording() {
     this.stopPolling();
     // Use the region-drawing overlay for freeform screenshot area
@@ -350,9 +534,11 @@ export class Recorder {
     this.stopPolling();
     this.view.webContents.executeJavaScript(`
       if (window.__dashsnap_cleanup) { window.__dashsnap_cleanup(); window.__dashsnap_cleanup = null; }
+      if (window.__dashsnap_filter_cleanup) { window.__dashsnap_filter_cleanup(); window.__dashsnap_filter_cleanup = null; }
       document.getElementById('__dashsnap_snap_canvas')?.remove();
       window.__dashsnap_overlay = false;
       window.__dashsnap_snap_overlay = false;
+      window.__dashsnap_filter_active = false;
     `).catch(() => {});
     this.window.webContents.send('recorder:cancelled');
   }
@@ -404,6 +590,39 @@ export class Recorder {
           this.stopPolling();
           await this.view.webContents.executeJavaScript('window.__dashsnap_snap_result = null;');
           this.window.webContents.send('recorder:region-selected', result);
+        }
+      } catch {
+        // Page may have navigated
+      }
+    }, 100);
+  }
+
+  private pollForFilterResult() {
+    this.pollInterval = setInterval(async () => {
+      try {
+        const cancelled = await this.view.webContents.executeJavaScript(
+          'window.__dashsnap_filter_cancelled || false'
+        );
+        if (cancelled) {
+          this.stopPolling();
+          await this.view.webContents.executeJavaScript('window.__dashsnap_filter_cancelled = false;');
+          this.window.webContents.send('recorder:cancelled');
+          return;
+        }
+
+        const done = await this.view.webContents.executeJavaScript(
+          'window.__dashsnap_filter_done || false'
+        );
+        if (done) {
+          this.stopPolling();
+          const results = await this.view.webContents.executeJavaScript(
+            'JSON.parse(JSON.stringify(window.__dashsnap_filter_results))'
+          );
+          await this.view.webContents.executeJavaScript(`
+            window.__dashsnap_filter_done = false;
+            window.__dashsnap_filter_results = null;
+          `);
+          this.window.webContents.send('recorder:filter-recorded', results);
         }
       } catch {
         // Page may have navigated

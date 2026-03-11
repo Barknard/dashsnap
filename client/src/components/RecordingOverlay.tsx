@@ -42,7 +42,7 @@ export function RecordingOverlay({ type }: RecordingOverlayProps) {
     type: 'Select an input element to type into',
     'scroll-element': 'Select a scrollable element',
     'search-select': 'Select the search input field',
-    filter: 'Select the filter trigger element',
+    filter: 'Guided filter recording — follow steps in browser',
   };
   const Icon = iconMap[type || 'click'];
   const color = colorMap[type || 'click'];

@@ -47,7 +47,6 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
   const [clickOffAfter, setClickOffAfter] = useState(true);
   const [searchText, setSearchText] = useState('');
   const [waitForResults, setWaitForResults] = useState(1);
-  const [optionTexts, setOptionTexts] = useState('');
   const [applySelector, setApplySelector] = useState('');
 
   useEffect(() => {
@@ -60,7 +59,7 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
     if (step.type === 'TYPE') { setTypeText(step.text); setClearFirst(step.clearFirst ?? false); setClickOffAfter(step.clickOffAfter !== false); }
     if (step.type === 'SCROLL_ELEMENT') { setScrollTop(step.scrollTop); setScrollLeft(step.scrollLeft ?? 0); }
     if (step.type === 'SEARCH_SELECT') { setSearchText(step.searchText); setWaitForResults(step.waitForResults ?? 1); setClearFirst(step.clearFirst ?? false); setClickOffAfter(step.clickOffAfter !== false); }
-    if (step.type === 'FILTER') { setOptionTexts((step.optionTexts || []).join('\n')); setApplySelector(step.applySelector ?? ''); setClickOffAfter(step.clickOffAfter !== false); }
+    if (step.type === 'FILTER') { setApplySelector(step.applySelector ?? ''); setClickOffAfter(step.clickOffAfter !== false); }
   }, [step]);
 
   if (!step) return null;
@@ -76,7 +75,7 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
     if (step.type === 'TYPE') { (updates as Record<string, unknown>).text = typeText; (updates as Record<string, unknown>).clearFirst = clearFirst; (updates as Record<string, unknown>).clickOffAfter = clickOffAfter; }
     if (step.type === 'SCROLL_ELEMENT') { (updates as Record<string, unknown>).scrollTop = scrollTop; (updates as Record<string, unknown>).scrollLeft = scrollLeft; }
     if (step.type === 'SEARCH_SELECT') { (updates as Record<string, unknown>).searchText = searchText; (updates as Record<string, unknown>).waitForResults = waitForResults; (updates as Record<string, unknown>).clearFirst = clearFirst; (updates as Record<string, unknown>).clickOffAfter = clickOffAfter; }
-    if (step.type === 'FILTER') { (updates as Record<string, unknown>).optionTexts = optionTexts.split('\n').map(s => s.trim()).filter(Boolean); (updates as Record<string, unknown>).applySelector = applySelector; (updates as Record<string, unknown>).clickOffAfter = clickOffAfter; }
+    if (step.type === 'FILTER') { (updates as Record<string, unknown>).applySelector = applySelector; (updates as Record<string, unknown>).clickOffAfter = clickOffAfter; }
     updateStep(step.id, updates);
     onClose();
   };
@@ -412,10 +411,10 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
             {step.type === 'FILTER' && (
               <>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-ds-text-muted">Filter Trigger Selector</label>
+                  <label className="text-xs font-medium text-ds-text-muted">Filter Trigger</label>
                   <div className="flex gap-2">
                     <div className="flex-1 h-9 px-3 flex items-center rounded-lg border border-ds-border bg-ds-bg text-sm text-ds-text-dim font-mono truncate">
-                      {step.selector}
+                      {step.selector || '(position-based)'}
                     </div>
                     <Button variant="outline" size="icon" onClick={handleCopySelector}>
                       <Copy className={cn('w-3.5 h-3.5', copied && 'text-ds-emerald')} />
@@ -423,29 +422,26 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-ds-text-muted">Options to Select (one per line)</label>
-                  <textarea
-                    value={optionTexts}
-                    onChange={e => setOptionTexts(e.target.value)}
-                    rows={4}
-                    placeholder={'Option 1\nOption 2\n{{variableName}}'}
-                    className="w-full rounded-lg border border-ds-border bg-ds-bg text-sm text-ds-text p-2 resize-y font-mono"
-                  />
+                  <label className="text-xs font-medium text-ds-text-muted">
+                    Recorded Options ({step.optionSelectors?.length || 0})
+                  </label>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {(step.optionSelectors || []).map((opt, i) => (
+                      <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-ds-bg border border-ds-border/50">
+                        <span className="text-[10px] font-bold text-ds-amber w-4">{i + 1}</span>
+                        <span className="text-xs text-ds-text truncate flex-1">{opt.label || opt.selector || '(position)'}</span>
+                      </div>
+                    ))}
+                  </div>
                   <p className="text-[10px] text-ds-text-dim">
-                    Text labels of filter options. Use {'{{variableName}}'} for CSV batch runs.
+                    Re-record the filter step to change options.
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-ds-text-muted">Apply Button Selector (optional)</label>
-                  <Input
-                    value={applySelector}
-                    onChange={e => setApplySelector(e.target.value)}
-                    placeholder="Leave empty to re-click trigger"
-                    className="font-mono text-xs"
-                  />
-                  <p className="text-[10px] text-ds-text-dim">
-                    If empty, the filter trigger is clicked again to apply.
-                  </p>
+                  <label className="text-xs font-medium text-ds-text-muted">Apply Button</label>
+                  <div className="h-9 px-3 flex items-center rounded-lg border border-ds-border bg-ds-bg text-sm text-ds-text-dim font-mono truncate">
+                    {step.applySelector || '(re-clicks trigger)'}
+                  </div>
                 </div>
                 <label className="flex items-center gap-2 text-xs text-ds-text-muted cursor-pointer">
                   <input type="checkbox" checked={clickOffAfter} onChange={e => setClickOffAfter(e.target.checked)} className="rounded border-ds-border" />

@@ -602,76 +602,32 @@ export class FlowRunner {
     waitSeconds: number,
   ): Promise<'success' | 'warning'> {
     const wc = this.view.webContents;
+    let usedFallback = false;
 
-    // 1. Click to open the filter
-    if (step.selector) {
-      const found = await wc.executeJavaScript(`
-        (function() {
-          const el = document.querySelector('${step.selector.replace(/'/g, "\\\\'")}');
-          if (el) { el.click(); return true; }
-          return false;
-        })()
-      `).catch(() => false);
-
-      if (!found) {
-        if (step.fallbackXY) {
-          const [x, y] = step.fallbackXY;
-          wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
-          wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
-        } else {
-          throw new Error(`Filter trigger not found: ${step.selector}`);
-        }
-      }
-    }
+    // 1. Click to open the filter trigger
+    const triggerClicked = await this.clickSelector(wc, step.selector, step.fallbackXY);
+    if (!triggerClicked) throw new Error(`Filter trigger not found: ${step.selector}`);
+    if (triggerClicked === 'fallback') usedFallback = true;
 
     await this.delay(waitSeconds * 1000);
 
-    // 2. Click each option by text content
-    let allFound = true;
-    for (const optionText of (step.optionTexts || [])) {
-      const substituted = this.substituteVariables(optionText);
-      const clicked = await wc.executeJavaScript(`
-        (function() {
-          const target = '${substituted.replace(/'/g, "\\\\'")}';
-          const all = document.querySelectorAll('*');
-          for (const el of all) {
-            if (el.children.length === 0 || el.tagName === 'OPTION' || el.tagName === 'LI' || el.getAttribute('role') === 'option' || el.getAttribute('role') === 'checkbox' || el.tagName === 'LABEL') {
-              const text = (el.textContent || '').trim();
-              if (text === target || text.toLowerCase() === target.toLowerCase()) {
-                const rect = el.getBoundingClientRect();
-                if (rect.width > 0 && rect.height > 0) {
-                  el.click();
-                  return true;
-                }
-              }
-            }
-          }
-          return false;
-        })()
-      `).catch(() => false);
-
-      if (!clicked) allFound = false;
+    // 2. Click each recorded option selector
+    for (const option of (step.optionSelectors || [])) {
+      const optionClicked = await this.clickSelector(wc, option.selector, option.fallbackXY);
+      if (!optionClicked) usedFallback = true;
+      if (optionClicked === 'fallback') usedFallback = true;
       await this.delay(300);
     }
 
     await this.delay(500);
 
-    // 3. Apply — click apply button or re-click trigger
+    // 3. Apply — click apply button or re-click trigger to close
     if (step.applySelector) {
-      await wc.executeJavaScript(`
-        (function() {
-          const el = document.querySelector('${step.applySelector.replace(/'/g, "\\\\'")}');
-          if (el) el.click();
-        })()
-      `).catch(() => {});
+      const applyClicked = await this.clickSelector(wc, step.applySelector, step.applyFallbackXY);
+      if (applyClicked === 'fallback') usedFallback = true;
     } else {
       // Re-click the trigger to close/apply
-      await wc.executeJavaScript(`
-        (function() {
-          const el = document.querySelector('${step.selector.replace(/'/g, "\\\\'")}');
-          if (el) el.click();
-        })()
-      `).catch(() => {});
+      await this.clickSelector(wc, step.selector, step.fallbackXY);
     }
 
     await this.delay(waitSeconds * 1000);
@@ -680,7 +636,31 @@ export class FlowRunner {
       await this.clickOff(wc);
     }
 
-    return allFound ? 'success' : 'warning';
+    return usedFallback ? 'warning' : 'success';
+  }
+
+  private async clickSelector(
+    wc: Electron.WebContents,
+    selector: string,
+    fallbackXY?: [number, number],
+  ): Promise<'ok' | 'fallback' | false> {
+    if (selector) {
+      const found = await wc.executeJavaScript(`
+        (function() {
+          const el = document.querySelector('${selector.replace(/'/g, "\\\\'")}');
+          if (el) { el.click(); return true; }
+          return false;
+        })()
+      `).catch(() => false);
+      if (found) return 'ok';
+    }
+    if (fallbackXY) {
+      const [x, y] = fallbackXY;
+      wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+      wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+      return 'fallback';
+    }
+    return false;
   }
 
   private async clickOff(wc: Electron.WebContents): Promise<void> {
