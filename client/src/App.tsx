@@ -226,6 +226,9 @@ export default function App() {
         return;
       }
 
+      // Convert each recorded action into an individual flow step
+      const groupId = `rec_${Date.now()}`;
+
       // Auto-insert a NAVIGATE step so playback starts on the same page
       if (startUrl && startUrl !== 'about:blank') {
         const navStep: FlowStep = {
@@ -233,12 +236,10 @@ export default function App() {
           id: generateId('step'),
           label: `Navigate: ${new URL(startUrl).hostname}`,
           url: startUrl,
+          group: groupId,
         };
         addStep(navStep);
       }
-
-      // Convert each recorded action into an individual flow step
-      const groupId = `rec_${Date.now()}`;
       for (const action of actions) {
         const selectorStrategy = (action.selectorStrategy || 'css') as ClickStep['selectorStrategy'];
         let step: FlowStep;

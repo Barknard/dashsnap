@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Switch from '@radix-ui/react-switch';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
@@ -7,6 +7,7 @@ import {
   GripVertical, Pencil, X, ChevronUp, ChevronDown, ChevronRight,
   Layout, Maximize2, SlidersHorizontal, Trash2,
   Hand, ListFilter, Type, ArrowDownUp, Search, Filter, Clapperboard,
+  Timer,
 } from 'lucide-react';
 import { type FlowStep, type PptxLayout, type RunStepStatus, type SnapStep } from '@shared/types';
 import { Badge, stepTypeBadgeVariant } from './ui/Badge';
@@ -18,6 +19,40 @@ import { useFlowStore } from '@/stores/flowStore';
 import { useAppStore } from '@/stores/appStore';
 import { browser } from '@/lib/ipc';
 import { cn, truncate } from '@/lib/utils';
+
+/** Live countdown timer shown on the currently-running step */
+function StepCountdown({ stepWaitSeconds }: { stepWaitSeconds: number }) {
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef(Date.now());
+
+  useEffect(() => {
+    startRef.current = Date.now();
+    setElapsed(0);
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+    }, 250);
+    return () => clearInterval(id);
+  }, []);
+
+  const remaining = Math.max(0, stepWaitSeconds - elapsed);
+  const pct = Math.min(100, (elapsed / stepWaitSeconds) * 100);
+
+  return (
+    <div className="flex items-center gap-1.5 ml-auto shrink-0">
+      <div className="relative w-16 h-1.5 rounded-full bg-ds-bg overflow-hidden">
+        <motion.div
+          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-ds-accent to-ds-cyan"
+          initial={{ width: '0%' }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.3 }}
+        />
+      </div>
+      <span className="text-[10px] font-mono font-bold text-ds-accent tabular-nums w-6 text-right">
+        {remaining > 0 ? `${remaining}s` : <Timer className="w-2.5 h-2.5 inline animate-spin" />}
+      </span>
+    </div>
+  );
+}
 
 const stepIcons: Record<string, typeof MousePointer> = {
   CLICK: MousePointer,
@@ -95,6 +130,7 @@ export function StepList({ onEditStep }: StepListProps) {
   const runProgress = useAppStore(s => s.runProgress);
   const setActiveTab = useAppStore(s => s.setActiveTab);
   const globalLayout = useAppStore(s => s.settings.pptxLayout);
+  const stepWaitSeconds = useFlowStore(s => s.defaults.stepWaitSeconds);
   const [expandedSnapId, setExpandedSnapId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
@@ -301,7 +337,7 @@ export function StepList({ onEditStep }: StepListProps) {
                   isSelected && 'bg-ds-accent/5 border-ds-accent/30 border-l-ds-accent',
                   !isSelected && !isInGroup && statusBorderColor(runResult?.status),
                   !isSelected && isInGroup && 'border-l-ds-accent/30',
-                  isCurrentlyRunning && 'ring-1 ring-ds-accent/40 bg-ds-accent/5',
+                  isCurrentlyRunning && 'ring-2 ring-ds-accent ring-offset-1 ring-offset-ds-bg bg-ds-accent/10 border-l-ds-accent shadow-[0_0_12px_rgba(124,92,252,0.3)]',
                   dragOverIndex === index && dragIndexRef.current !== index && 'border-t-2 border-t-ds-accent',
                   isInGroup && !isGroupEnd && 'mb-0 rounded-b-none',
                   isInGroup && !isGroupStart && 'rounded-t-none border-t-0',
@@ -333,7 +369,10 @@ export function StepList({ onEditStep }: StepListProps) {
                       : stepDetail(step)}
                   </p>
                 </div>
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                {isCurrentlyRunning && (
+                  <StepCountdown stepWaitSeconds={step.type === 'WAIT' ? (step as { seconds: number }).seconds : stepWaitSeconds} />
+                )}
+                <div className={cn("flex items-center gap-0.5 transition-opacity shrink-0", isCurrentlyRunning ? 'opacity-0' : 'opacity-0 group-hover:opacity-100')}>
                   {isSnap && (
                     <Tooltip content="Slide layout">
                       <Button

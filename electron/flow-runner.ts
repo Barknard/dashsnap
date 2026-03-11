@@ -12,6 +12,12 @@ export class FlowRunner {
   private shouldStop = false;
   private currentVariables: Record<string, string> = {};
   private _delayResolve: (() => void) | null = null;
+  private _runTimestamp: string = '';
+
+  private generateRunTimestamp(): string {
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`;
+  }
 
   constructor(view: BrowserView, window: BrowserWindow, config: ConfigManager) {
     this.view = view;
@@ -26,6 +32,7 @@ export class FlowRunner {
 
     this.running = true;
     this.shouldStop = false;
+    this._runTimestamp = this.generateRunTimestamp();
 
     const settings = this.config.loadSettings();
     const outputDir = settings.outputPath ||
@@ -105,6 +112,8 @@ export class FlowRunner {
     const flow = flowConfig.flows.find((f: Flow) => f.id === flowId);
     if (!flow || !flow.steps[stepIndex]) return;
 
+    this._runTimestamp = this.generateRunTimestamp();
+
     const settings = this.config.loadSettings();
     const outputDir = settings.outputPath ||
       path.join(this.config.getBasePath(), '..', 'output');
@@ -147,6 +156,7 @@ export class FlowRunner {
 
     this.running = true;
     this.shouldStop = false;
+    this._runTimestamp = this.generateRunTimestamp();
 
     const settings = this.config.loadSettings();
     const outputDir = settings.outputPath ||
@@ -474,7 +484,7 @@ export class FlowRunner {
       const varSuffix = Object.keys(this.currentVariables).length > 0
         ? '_' + Object.values(this.currentVariables).join('_').replace(/[^a-zA-Z0-9_-]/g, '')
         : '';
-      const filename = `snap_${String(index + 1).padStart(2, '0')}${varSuffix}.png`;
+      const filename = `snap_${this._runTimestamp}_${String(index + 1).padStart(2, '0')}${varSuffix}.png`;
       const filePath = path.join(outputDir, filename);
       fs.writeFileSync(filePath, image.toPNG());
       return filePath;
@@ -871,7 +881,7 @@ export class FlowRunner {
               const varSuffix = Object.keys(this.currentVariables).length > 0
                 ? '_' + Object.values(this.currentVariables).join('_').replace(/[^a-zA-Z0-9_-]/g, '')
                 : '';
-              const filename = `snap_${String(screenshots.length + 1).padStart(2, '0')}${varSuffix}.png`;
+              const filename = `snap_${this._runTimestamp}_${String(screenshots.length + 1).padStart(2, '0')}${varSuffix}.png`;
               const filePath = path.join(outputDir, filename);
               fs.writeFileSync(filePath, image.toPNG());
               screenshots.push({

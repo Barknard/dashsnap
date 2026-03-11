@@ -704,10 +704,10 @@ const MACRO_OVERLAY_JS = `
     + '<span style="font-size:10px;color:#aaa"><kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">S</kbd> snap \\u00b7 <kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">R</kbd> region</span>'
     + ' \\u00b7 '
     + '<button id="__ds_done_btn" style="background:#7C5CFC;color:white;border:none;padding:5px 16px;border-radius:6px;font:bold 12px system-ui;cursor:pointer;">Done</button>';
-  var countSpan = document.getElementById('__ds_action_count');
   function updateBanner() {
     var count = window.__dashsnap_macro_actions.length;
-    countSpan.textContent = count + ' action' + (count !== 1 ? 's' : '');
+    var cs = banner.querySelector('#__ds_action_count');
+    if (cs) cs.textContent = count + ' action' + (count !== 1 ? 's' : '');
   }
 
   // Done button — banner sits above the shield, so handle clicks directly on it
