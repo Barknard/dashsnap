@@ -312,33 +312,6 @@ export class FlowRunner {
     return result;
   }
 
-  private async findElement(wc: Electron.WebContents, selector: string): Promise<{ x: number; y: number; tag: string; text: string } | null> {
-    // Handle xpath: prefix selectors
-    if (selector.startsWith('xpath:')) {
-      const xpath = selector.substring(6);
-      return wc.executeJavaScript(`
-        (function() {
-          var result = document.evaluate(${JSON.stringify(xpath)}, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-          var el = result.singleNodeValue;
-          if (!el) return null;
-          el.scrollIntoView({ block: 'center', behavior: 'instant' });
-          var r = el.getBoundingClientRect();
-          return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), tag: el.tagName || '', text: (el.textContent || '').trim().substring(0, 40) };
-        })()
-      `).catch(() => null);
-    }
-    // Regular CSS selector
-    return wc.executeJavaScript(`
-      (function() {
-        var el = document.querySelector(${JSON.stringify(selector)});
-        if (!el) return null;
-        el.scrollIntoView({ block: 'center', behavior: 'instant' });
-        var r = el.getBoundingClientRect();
-        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), tag: el.tagName || '', text: (el.textContent || '').trim().substring(0, 40) };
-      })()
-    `).catch(() => null);
-  }
-
   /**
    * After firing a click, wait smartly: if navigation starts, wait for page load.
    * Otherwise wait a short default. Returns quickly when the page is ready.

@@ -52,7 +52,7 @@ const CLICK_OVERLAY_JS = `
   }
 
   function getBestSelector(el) {
-    function cssEscapeVal(v) { return v.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"'); }
+    function cssEscapeVal(v) { return v.replace(/"/g, '\\"'); }
     function unique(sel) { try { return document.querySelectorAll(sel).length === 1; } catch(e) { return false; } }
 
     // Priority 1: aria-label
@@ -313,7 +313,7 @@ const FILTER_OVERLAY_JS = `
   window.__dashsnap_filter_results = { trigger: null, options: [], apply: null };
 
   const getBestSelector = (function() {
-    function cssEscapeVal(v) { return v.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"'); }
+    function cssEscapeVal(v) { return v.replace(/"/g, '\\"'); }
     function unique(sel) { try { return document.querySelectorAll(sel).length === 1; } catch(e) { return false; } }
     var UNSTABLE = ['data-ved','data-csiid','data-ei','data-jsarwt','data-usg','data-lpage','data-atf',
       'data-frt','data-ictx','data-surl','data-docid','data-deferred','data-ri','data-tbnid','data-cb',
@@ -526,7 +526,7 @@ const MACRO_OVERLAY_JS = `
       'data-ri', 'data-tbnid', 'data-cb', 'data-nhd', 'data-lhid', 'data-ctbid', 'data-reactid']);
 
     // Safely escape a value for use inside a CSS attribute selector: [attr="value"]
-    function cssEscapeVal(v) { return v.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"'); }
+    function cssEscapeVal(v) { return v.replace(/"/g, '\\"'); }
 
     function unique(sel) {
       try { return document.querySelectorAll(sel).length === 1; } catch(e) { return false; }
@@ -839,30 +839,6 @@ const MACRO_OVERLAY_JS = `
     });
   }
 
-  // Walk up from the clicked element to find the nearest meaningful/interactive element
-  function findInteractiveAncestor(el) {
-    var current = el;
-    var interactiveTags = ['A', 'BUTTON', 'INPUT', 'TEXTAREA', 'SELECT', 'LABEL'];
-    // Walk up max 5 levels to find an interactive ancestor
-    for (var i = 0; i < 5 && current && current !== document.body; i++) {
-      if (interactiveTags.includes(current.tagName)) return current;
-      if (current.getAttribute('role') === 'button' || current.getAttribute('role') === 'link' ||
-          current.getAttribute('role') === 'tab' || current.getAttribute('role') === 'menuitem') return current;
-      if (current.onclick || current.getAttribute('tabindex')) return current;
-      current = current.parentElement;
-    }
-    // No interactive ancestor found — check if original element has a good selector
-    var { selector } = getBestSelector(el);
-    if (selector) return el;
-    // Try parents for better selectors
-    current = el.parentElement;
-    for (var i = 0; i < 3 && current && current !== document.body; i++) {
-      var { selector } = getBestSelector(current);
-      if (selector) return current;
-      current = current.parentElement;
-    }
-    return el; // give up, use original
-  }
 
   // Track last recorded action time+position to deduplicate click vs mousedown
   var lastRecordedAt = 0;
@@ -1093,54 +1069,28 @@ export class Recorder {
   private window: BrowserWindow;
   private pollInterval: ReturnType<typeof setInterval> | null = null;
   private _macroNavHandler: (() => void) | null = null;
-  private _macroWillNavHandler: ((_e: Electron.Event, url: string) => void) | null = null;
   private _macroConsoleHandler: ((_e: Electron.Event, level: number, message: string) => void) | null = null;
   private _macroStartUrl: string = '';
-  private _macroAccumulatedActions: unknown[] = [];  // Actions preserved across navigations
-  private _lastSyncedCount: number = 0;
+  private _macroAccumulatedActions: unknown[] = [];
 
   constructor(view: BrowserView, window: BrowserWindow) {
     this.view = view;
     this.window = window;
   }
 
-  async startClickRecording() {
+  /** Start element-picker recording (used by click, snap, hover, select, type, scroll-element) */
+  private async startElementPicker() {
     this.stopPolling();
     await this.view.webContents.executeJavaScript(CLICK_OVERLAY_JS);
     this.pollForClickResult();
   }
 
-  async startSnapRecording() {
-    this.stopPolling();
-    // Use the same element-picker overlay as click recording
-    // The renderer will create a SNAP step using the element's bounding rect
-    await this.view.webContents.executeJavaScript(CLICK_OVERLAY_JS);
-    this.pollForClickResult();
-  }
-
-  async startHoverRecording() {
-    this.stopPolling();
-    await this.view.webContents.executeJavaScript(CLICK_OVERLAY_JS);
-    this.pollForClickResult();
-  }
-
-  async startSelectRecording() {
-    this.stopPolling();
-    await this.view.webContents.executeJavaScript(CLICK_OVERLAY_JS);
-    this.pollForClickResult();
-  }
-
-  async startTypeRecording() {
-    this.stopPolling();
-    await this.view.webContents.executeJavaScript(CLICK_OVERLAY_JS);
-    this.pollForClickResult();
-  }
-
-  async startScrollElementRecording() {
-    this.stopPolling();
-    await this.view.webContents.executeJavaScript(CLICK_OVERLAY_JS);
-    this.pollForClickResult();
-  }
+  async startClickRecording() { return this.startElementPicker(); }
+  async startSnapRecording() { return this.startElementPicker(); }
+  async startHoverRecording() { return this.startElementPicker(); }
+  async startSelectRecording() { return this.startElementPicker(); }
+  async startTypeRecording() { return this.startElementPicker(); }
+  async startScrollElementRecording() { return this.startElementPicker(); }
 
   async startFilterRecording() {
     this.stopPolling();
@@ -1152,7 +1102,6 @@ export class Recorder {
     this.stopPolling();
     this._macroStartUrl = this.view.webContents.getURL();
     this._macroAccumulatedActions = [];
-    this._lastSyncedCount = 0;
     await this.view.webContents.executeJavaScript(MACRO_OVERLAY_JS);
 
     // Real-time action capture via console.log — catches actions even if navigation
@@ -1168,7 +1117,6 @@ export class Recorder {
           );
           if (!isDuplicate) {
             this._macroAccumulatedActions.push(action);
-            this._lastSyncedCount = this._macroAccumulatedActions.length;
             console.log('[Macro] Real-time capture:', action.action, action.label, '| selector:', action.selector || 'XY fallback');
           }
         } catch { /* parse error, ignore */ }
@@ -1310,56 +1258,45 @@ export class Recorder {
   private pollForMacroResult() {
     this.pollInterval = setInterval(async () => {
       try {
-        const cancelled = await this.view.webContents.executeJavaScript(
-          'window.__dashsnap_macro_cancelled || false'
-        );
-        if (cancelled) {
+        // Single JS call to read all state at once — avoids race conditions from multiple round-trips
+        const state = await this.view.webContents.executeJavaScript(`
+          (function() {
+            return {
+              cancelled: window.__dashsnap_macro_cancelled || false,
+              done: window.__dashsnap_macro_done || false,
+              pendingType: window.__dashsnap_macro_pending_type ? JSON.parse(JSON.stringify(window.__dashsnap_macro_pending_type)) : null,
+              actions: window.__dashsnap_macro_actions ? JSON.parse(JSON.stringify(window.__dashsnap_macro_actions)) : null,
+            };
+          })()
+        `);
+
+        if (state.cancelled) {
           this.stopPolling();
-          await this.view.webContents.executeJavaScript('window.__dashsnap_macro_cancelled = false;');
+          await this.view.webContents.executeJavaScript('window.__dashsnap_macro_cancelled = false;').catch(() => {});
           this.window.webContents.send('recorder:cancelled');
           return;
         }
 
-        const done = await this.view.webContents.executeJavaScript(
-          'window.__dashsnap_macro_done || false'
-        );
-        if (done) {
+        if (state.done) {
           this.stopPolling();
-          // Read final actions from the page (most complete snapshot)
-          const finalPageActions = await this.view.webContents.executeJavaScript(
-            'JSON.parse(JSON.stringify(window.__dashsnap_macro_actions))'
-          ).catch(() => []);
-          // Use whichever has more actions: the final page read or our accumulated copy
-          const allActions = (finalPageActions && finalPageActions.length >= this._macroAccumulatedActions.length)
-            ? finalPageActions
+          const allActions = (state.actions && state.actions.length >= this._macroAccumulatedActions.length)
+            ? state.actions
             : this._macroAccumulatedActions;
           this._macroAccumulatedActions = [];
           const startUrl = this._macroStartUrl || this.view.webContents.getURL();
-          await this.view.webContents.executeJavaScript(`
-            window.__dashsnap_macro_done = false;
-            window.__dashsnap_macro_actions = [];
-          `).catch(() => {});
+          await this.view.webContents.executeJavaScript('window.__dashsnap_macro_done = false; window.__dashsnap_macro_actions = [];').catch(() => {});
           this.window.webContents.send('recorder:macro-recorded', allActions, startUrl);
           return;
         }
 
-        // Check for pending type action — the overlay signals us to type text using trusted events
-        const pendingType = await this.view.webContents.executeJavaScript(
-          'window.__dashsnap_macro_pending_type ? JSON.parse(JSON.stringify(window.__dashsnap_macro_pending_type)) : null'
-        );
-        if (pendingType) {
-          await this.view.webContents.executeJavaScript('window.__dashsnap_macro_pending_type = null;');
-          await this.executeTrustedType(pendingType.selector, pendingType.text, pendingType.pressEnter);
+        if (state.pendingType) {
+          await this.view.webContents.executeJavaScript('window.__dashsnap_macro_pending_type = null;').catch(() => {});
+          await this.executeTrustedType(state.pendingType.selector, state.pendingType.text, state.pendingType.pressEnter);
         }
 
-        // Continuously sync actions from the page to main process
-        // Only update if page has MORE actions than our accumulated copy (avoids losing real-time captured ones)
-        const currentActions = await this.view.webContents.executeJavaScript(
-          'window.__dashsnap_macro_actions ? JSON.parse(JSON.stringify(window.__dashsnap_macro_actions)) : null'
-        );
-        if (currentActions && currentActions.length > this._macroAccumulatedActions.length) {
-          this._macroAccumulatedActions = currentActions;
-          this._lastSyncedCount = currentActions.length;
+        // Sync actions — only update if page has more than our accumulated copy
+        if (state.actions && state.actions.length > this._macroAccumulatedActions.length) {
+          this._macroAccumulatedActions = state.actions;
         }
       } catch {
         // Page may have navigated — accumulated actions are safe in main process
@@ -1427,16 +1364,11 @@ export class Recorder {
       this.view.webContents.removeListener('console-message', this._macroConsoleHandler);
       this._macroConsoleHandler = null;
     }
-    if (this._macroWillNavHandler) {
-      this.view.webContents.removeListener('will-navigate', this._macroWillNavHandler);
-      this._macroWillNavHandler = null;
-    }
     if (this._macroNavHandler) {
       this.view.webContents.removeListener('did-navigate', this._macroNavHandler);
       this.view.webContents.removeListener('did-navigate-in-page', this._macroNavHandler);
       this._macroNavHandler = null;
     }
     this._macroAccumulatedActions = [];
-    this._lastSyncedCount = 0;
   }
 }
