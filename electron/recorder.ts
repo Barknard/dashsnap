@@ -52,55 +52,64 @@ const CLICK_OVERLAY_JS = `
   }
 
   function getBestSelector(el) {
-    // Priority 1: data-* attributes
-    for (const attr of el.attributes) {
-      if (attr.name.startsWith('data-') && attr.name !== 'data-reactid') {
-        const sel = el.tagName.toLowerCase() + '[' + attr.name + '="' + attr.value + '"]';
-        if (document.querySelectorAll(sel).length === 1) {
-          return { selector: sel, strategy: 'data-attr' };
-        }
-      }
+    function cssEscapeVal(v) { return v.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"'); }
+    function unique(sel) { try { return document.querySelectorAll(sel).length === 1; } catch(e) { return false; } }
+
+    // Priority 1: aria-label
+    var ariaLabel = el.getAttribute('aria-label');
+    if (ariaLabel) {
+      var sel = '[aria-label="' + cssEscapeVal(ariaLabel) + '"]';
+      if (unique(sel)) return { selector: sel, strategy: 'aria-label' };
     }
 
-    // Priority 2: aria-label
-    const ariaLabel = el.getAttribute('aria-label');
-    if (ariaLabel) {
-      const sel = '[aria-label="' + ariaLabel.replace(/"/g, '\\\\\\\\"') + '"]';
-      if (document.querySelectorAll(sel).length === 1) {
-        return { selector: sel, strategy: 'aria-label' };
+    // Priority 2: data-* attributes (skip unstable session tokens)
+    var UNSTABLE = ['data-ved','data-csiid','data-ei','data-jsarwt','data-usg','data-lpage','data-atf',
+      'data-frt','data-ictx','data-surl','data-docid','data-deferred','data-ri','data-tbnid','data-cb',
+      'data-nhd','data-lhid','data-ctbid','data-reactid'];
+    for (var i = 0; i < el.attributes.length; i++) {
+      var attr = el.attributes[i];
+      if (attr.name.startsWith('data-') && UNSTABLE.indexOf(attr.name) === -1) {
+        if (attr.value && attr.value.length < 100) {
+          var sel = el.tagName.toLowerCase() + '[' + attr.name + '="' + cssEscapeVal(attr.value) + '"]';
+          if (unique(sel)) return { selector: sel, strategy: 'data-attr' };
+        }
       }
     }
 
     // Priority 3: Unique ID
-    if (el.id && document.querySelectorAll('#' + CSS.escape(el.id)).length === 1) {
-      return { selector: '#' + CSS.escape(el.id), strategy: 'id' };
+    if (el.id && !/^[:_]/.test(el.id) && el.id.length < 50) {
+      var sel = '#' + CSS.escape(el.id);
+      if (unique(sel)) return { selector: sel, strategy: 'id' };
     }
 
-    // Priority 4: Text content
-    const text = (el.textContent || '').trim();
+    // Priority 4: name attribute
+    var nameAttr = el.getAttribute('name');
+    if (nameAttr) {
+      var sel = el.tagName.toLowerCase() + '[name="' + cssEscapeVal(nameAttr) + '"]';
+      if (unique(sel)) return { selector: sel, strategy: 'name' };
+    }
+
+    // Priority 5: Role + text content
+    var text = (el.textContent || '').trim();
     if (text && text.length < 50) {
-      const role = el.getAttribute('role');
+      var role = el.getAttribute('role');
       if (role) {
-        const sel = '[role="' + role + '"]';
-        const matches = [...document.querySelectorAll(sel)].filter(e => (e.textContent||'').trim() === text);
-        if (matches.length === 1) {
-          return { selector: sel, strategy: 'text' };
-        }
+        var sel = '[role="' + role + '"]';
+        var matches = [].slice.call(document.querySelectorAll(sel)).filter(function(e) { return (e.textContent||'').trim() === text; });
+        if (matches.length === 1) return { selector: sel, strategy: 'role-text' };
       }
     }
 
-    // Priority 5: CSS class + tag combo
+    // Priority 6: CSS class + tag combo
     if (el.className && typeof el.className === 'string') {
-      const classes = el.className.split(/\\s+/).filter(c => c && !c.startsWith('__')).slice(0, 2);
+      var classes = el.className.split(/\\s+/).filter(function(c) { return c && !c.startsWith('__'); }).slice(0, 2);
       if (classes.length > 0) {
-        const sel = el.tagName.toLowerCase() + '.' + classes.join('.');
-        if (document.querySelectorAll(sel).length === 1) {
-          return { selector: sel, strategy: 'css-combo' };
-        }
+        var sel = el.tagName.toLowerCase() + '.' + classes.map(function(c) { return CSS.escape(c); }).join('.');
+        if (unique(sel)) return { selector: sel, strategy: 'css-combo' };
       }
     }
 
-    // Priority 6: XY fallback
+    // Priority 7: XY fallback
     return { selector: '', strategy: 'xy-position' };
   }
 
@@ -303,36 +312,45 @@ const FILTER_OVERLAY_JS = `
   window.__dashsnap_filter_phase = 'trigger';
   window.__dashsnap_filter_results = { trigger: null, options: [], apply: null };
 
-  const getBestSelector = ${/* reuse the same function inline */ ''}(function() {
+  const getBestSelector = (function() {
+    function cssEscapeVal(v) { return v.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"'); }
+    function unique(sel) { try { return document.querySelectorAll(sel).length === 1; } catch(e) { return false; } }
+    var UNSTABLE = ['data-ved','data-csiid','data-ei','data-jsarwt','data-usg','data-lpage','data-atf',
+      'data-frt','data-ictx','data-surl','data-docid','data-deferred','data-ri','data-tbnid','data-cb',
+      'data-nhd','data-lhid','data-ctbid','data-reactid'];
     return function getBestSelector(el) {
-      for (const attr of el.attributes) {
-        if (attr.name.startsWith('data-') && attr.name !== 'data-reactid') {
-          const sel = el.tagName.toLowerCase() + '[' + attr.name + '="' + attr.value + '"]';
-          if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'data-attr' };
+      var ariaLabel = el.getAttribute('aria-label');
+      if (ariaLabel) {
+        var sel = '[aria-label="' + cssEscapeVal(ariaLabel) + '"]';
+        if (unique(sel)) return { selector: sel, strategy: 'aria-label' };
+      }
+      for (var i = 0; i < el.attributes.length; i++) {
+        var attr = el.attributes[i];
+        if (attr.name.startsWith('data-') && UNSTABLE.indexOf(attr.name) === -1) {
+          if (attr.value && attr.value.length < 100) {
+            var sel = el.tagName.toLowerCase() + '[' + attr.name + '="' + cssEscapeVal(attr.value) + '"]';
+            if (unique(sel)) return { selector: sel, strategy: 'data-attr' };
+          }
         }
       }
-      const ariaLabel = el.getAttribute('aria-label');
-      if (ariaLabel) {
-        const sel = '[aria-label="' + ariaLabel.replace(/"/g, '\\\\\\\\"') + '"]';
-        if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'aria-label' };
+      if (el.id && !/^[:_]/.test(el.id) && el.id.length < 50) {
+        var sel = '#' + CSS.escape(el.id);
+        if (unique(sel)) return { selector: sel, strategy: 'id' };
       }
-      if (el.id && document.querySelectorAll('#' + CSS.escape(el.id)).length === 1) {
-        return { selector: '#' + CSS.escape(el.id), strategy: 'id' };
-      }
-      const text = (el.textContent || '').trim();
+      var text = (el.textContent || '').trim();
       if (text && text.length < 50) {
-        const role = el.getAttribute('role');
+        var role = el.getAttribute('role');
         if (role) {
-          const sel = '[role="' + role + '"]';
-          const matches = [...document.querySelectorAll(sel)].filter(e => (e.textContent||'').trim() === text);
-          if (matches.length === 1) return { selector: sel, strategy: 'text' };
+          var sel = '[role="' + role + '"]';
+          var matches = [].slice.call(document.querySelectorAll(sel)).filter(function(e) { return (e.textContent||'').trim() === text; });
+          if (matches.length === 1) return { selector: sel, strategy: 'role-text' };
         }
       }
       if (el.className && typeof el.className === 'string') {
-        const classes = el.className.split(/\\s+/).filter(c => c && !c.startsWith('__')).slice(0, 2);
+        var classes = el.className.split(/\\s+/).filter(function(c) { return c && !c.startsWith('__'); }).slice(0, 2);
         if (classes.length > 0) {
-          const sel = el.tagName.toLowerCase() + '.' + classes.join('.');
-          if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'css-combo' };
+          var sel = el.tagName.toLowerCase() + '.' + classes.map(function(c) { return CSS.escape(c); }).join('.');
+          if (unique(sel)) return { selector: sel, strategy: 'css-combo' };
         }
       }
       return { selector: '', strategy: 'xy-position' };
@@ -503,66 +521,86 @@ const MACRO_OVERLAY_JS = `
 
   const getBestSelector = (function() {
     // Session-specific data attributes that change every page load — skip these
-    const UNSTABLE_DATA_ATTRS = ['data-ved', 'data-csiid', 'data-ei', 'data-jsarwt', 'data-usg',
+    const UNSTABLE = new Set(['data-ved', 'data-csiid', 'data-ei', 'data-jsarwt', 'data-usg',
       'data-lpage', 'data-atf', 'data-frt', 'data-ictx', 'data-surl', 'data-docid', 'data-deferred',
-      'data-ri', 'data-tbnid', 'data-cb', 'data-nhd', 'data-lhid', 'data-ctbid'];
+      'data-ri', 'data-tbnid', 'data-cb', 'data-nhd', 'data-lhid', 'data-ctbid', 'data-reactid']);
+
+    // Safely escape a value for use inside a CSS attribute selector: [attr="value"]
+    function cssEscapeVal(v) { return v.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"'); }
+
+    function unique(sel) {
+      try { return document.querySelectorAll(sel).length === 1; } catch(e) { return false; }
+    }
+
     return function getBestSelector(el) {
-      // 0. aria-label first — most stable across sessions
-      const ariaLabel = el.getAttribute('aria-label');
+      // 0. aria-label — most stable across sessions
+      var ariaLabel = el.getAttribute('aria-label');
       if (ariaLabel) {
-        const sel = '[aria-label="' + ariaLabel.replace(/"/g, '\\\\"') + '"]';
-        if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'aria-label' };
+        var sel = '[aria-label="' + cssEscapeVal(ariaLabel) + '"]';
+        if (unique(sel)) return { selector: sel, strategy: 'aria-label' };
       }
       // 1. Stable data attributes (skip session-specific ones)
-      for (const attr of el.attributes) {
-        if (attr.name.startsWith('data-') && attr.name !== 'data-reactid' && !UNSTABLE_DATA_ATTRS.includes(attr.name)) {
+      for (var i = 0; i < el.attributes.length; i++) {
+        var attr = el.attributes[i];
+        if (attr.name.startsWith('data-') && !UNSTABLE.has(attr.name)) {
           if (attr.value && attr.value.length < 100) {
-            const sel = el.tagName.toLowerCase() + '[' + attr.name + '="' + attr.value + '"]';
-            if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'data-attr' };
+            var sel = el.tagName.toLowerCase() + '[' + attr.name + '="' + cssEscapeVal(attr.value) + '"]';
+            if (unique(sel)) return { selector: sel, strategy: 'data-attr' };
           }
         }
       }
       // 2. ID (skip session-generated IDs)
-      if (el.id && !/^[:_]/.test(el.id) && el.id.length < 50 && document.querySelectorAll('#' + CSS.escape(el.id)).length === 1) {
-        return { selector: '#' + CSS.escape(el.id), strategy: 'id' };
+      if (el.id && !/^[:_]/.test(el.id) && el.id.length < 50) {
+        var sel = '#' + CSS.escape(el.id);
+        if (unique(sel)) return { selector: sel, strategy: 'id' };
       }
-      // 3. name attribute (very stable for form elements like input[name="q"])
+      // 3. name attribute (very stable for form elements)
       var nameAttr = el.getAttribute('name');
       if (nameAttr) {
-        var nameSel = el.tagName.toLowerCase() + '[name="' + nameAttr.replace(/"/g, '\\\\"') + '"]';
-        if (document.querySelectorAll(nameSel).length === 1) return { selector: nameSel, strategy: 'name' };
+        var sel = el.tagName.toLowerCase() + '[name="' + cssEscapeVal(nameAttr) + '"]';
+        if (unique(sel)) return { selector: sel, strategy: 'name' };
       }
-      const text = (el.textContent || '').trim();
+      // 4. role + text content
+      var text = (el.textContent || '').trim();
       if (text && text.length < 50) {
-        const role = el.getAttribute('role');
+        var role = el.getAttribute('role');
         if (role) {
-          const sel = '[role="' + role + '"]';
-          const matches = [...document.querySelectorAll(sel)].filter(e => (e.textContent||'').trim() === text);
-          if (matches.length === 1) return { selector: sel, strategy: 'text' };
+          var sel = '[role="' + role + '"]';
+          var matches = [].slice.call(document.querySelectorAll(sel)).filter(function(e) { return (e.textContent||'').trim() === text; });
+          if (matches.length === 1) return { selector: sel, strategy: 'role-text' };
         }
-        // Links/buttons: match by tag + exact text content
+        // 5. Links/buttons: use tag + text content as CSS-only approach
         var tag = el.tagName.toLowerCase();
         if (tag === 'a' || tag === 'button') {
-          var sameTag = [...document.querySelectorAll(tag)].filter(e => (e.textContent||'').trim() === text);
+          // Try href for links first — more reliable than text matching
+          if (tag === 'a' && el.getAttribute('href')) {
+            var href = el.getAttribute('href');
+            if (href.length < 200) {
+              var sel = 'a[href="' + cssEscapeVal(href) + '"]';
+              if (unique(sel)) return { selector: sel, strategy: 'href' };
+            }
+          }
+          // Use xpath for text match — most reliable way to match by text
+          var sameTag = [].slice.call(document.querySelectorAll(tag)).filter(function(e) { return (e.textContent||'').trim() === text; });
           if (sameTag.length === 1) {
-            var safeText = text.replace(/'/g, "\\\\'");
-            return { selector: 'xpath://' + tag + "[normalize-space(.)='" + safeText + "']", strategy: 'text-match' };
+            return { selector: 'xpath://' + tag + '[normalize-space(.)="' + text.replace(/"/g, '\\"') + '"]', strategy: 'text-match' };
           }
         }
       }
-      // Links: match by href attribute
+      // 6. href for links (if text match didn't work above)
       if (el.tagName === 'A' && el.getAttribute('href')) {
         var href = el.getAttribute('href');
         if (href.length < 200) {
-          var hrefSel = 'a[href="' + href.replace(/"/g, '\\\\"') + '"]';
-          if (document.querySelectorAll(hrefSel).length === 1) return { selector: hrefSel, strategy: 'href' };
+          var sel = 'a[href="' + cssEscapeVal(href) + '"]';
+          if (unique(sel)) return { selector: sel, strategy: 'href' };
         }
       }
+      // 7. CSS class combo
       if (el.className && typeof el.className === 'string') {
-        const classes = el.className.split(/\\s+/).filter(c => c && !c.startsWith('__')).slice(0, 2);
+        var classes = el.className.split(/\\s+/).filter(function(c) { return c && !c.startsWith('__'); }).slice(0, 2);
         if (classes.length > 0) {
-          const sel = el.tagName.toLowerCase() + '.' + classes.join('.');
-          if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'css-combo' };
+          var sel = el.tagName.toLowerCase() + '.' + classes.map(function(c) { return CSS.escape(c); }).join('.');
+          if (unique(sel)) return { selector: sel, strategy: 'css-combo' };
         }
       }
       return { selector: '', strategy: 'xy-position' };
