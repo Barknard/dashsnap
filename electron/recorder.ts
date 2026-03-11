@@ -840,9 +840,17 @@ const MACRO_OVERLAY_JS = `
   }
 
 
-  // Track last recorded action time+position to deduplicate click vs mousedown
+  // Dedup: track last recorded action to prevent click+mousedown double-recording
   var lastRecordedAt = 0;
-  var lastRecordedXY = '';
+  var lastRecordedSelector = '';
+  var lastRecordedXY = [0, 0];
+  // Track click events so mousedown fallback knows to skip
+  var lastClickAt = 0;
+  var lastClickXY = [0, 0];
+
+  function nearXY(a, b) {
+    return Math.abs(a[0] - b[0]) < 30 && Math.abs(a[1] - b[1]) < 30;
+  }
 
   function recordClickAction(rawEl, eventType) {
     if (!rawEl || rawEl === highlight || rawEl === tooltip) return;
@@ -862,16 +870,20 @@ const MACRO_OVERLAY_JS = `
     }
 
     // Use the exact clicked element — don't walk up the DOM.
-    // This matches v1.10 behavior and works with custom dropdown options.
     const el = rawEl;
     const rect = el.getBoundingClientRect();
-    var xyKey = Math.round(rect.left) + ',' + Math.round(rect.top);
+    var cx = Math.round(rect.left + rect.width/2);
+    var cy = Math.round(rect.top + rect.height/2);
     var now = Date.now();
 
-    // Deduplicate: if same position was recorded in the last 500ms, skip
-    if (xyKey === lastRecordedXY && now - lastRecordedAt < 500) return;
-
     const { selector, strategy } = getBestSelector(el);
+
+    // Deduplicate: same selector or nearby position within 500ms = same click
+    if (now - lastRecordedAt < 500) {
+      if (selector && selector === lastRecordedSelector) return;
+      if (nearXY([cx, cy], lastRecordedXY)) return;
+    }
+
     const label = getLabel(el);
     const meta = getElementMeta(el);
     const actionType = isTypeable(el) ? 'type' : (el.tagName === 'SELECT' ? 'select' : 'click');
@@ -879,7 +891,7 @@ const MACRO_OVERLAY_JS = `
     var actionObj = {
       selector: selector,
       selectorStrategy: strategy,
-      fallbackXY: [Math.round(rect.left + rect.width/2), Math.round(rect.top + rect.height/2)],
+      fallbackXY: [cx, cy],
       label: label,
       action: actionType,
       value: '',
@@ -893,7 +905,8 @@ const MACRO_OVERLAY_JS = `
     }
 
     lastRecordedAt = now;
-    lastRecordedXY = xyKey;
+    lastRecordedSelector = selector;
+    lastRecordedXY = [cx, cy];
 
     window.__dashsnap_macro_actions.push(actionObj);
     console.log('__DASHSNAP_ACTION__' + JSON.stringify(actionObj));
@@ -902,25 +915,27 @@ const MACRO_OVERLAY_JS = `
   }
 
   function onClick(e) {
-    // Record the click but let it pass through to the page
+    var rect = e.target.getBoundingClientRect();
+    lastClickAt = Date.now();
+    lastClickXY = [Math.round(rect.left + rect.width/2), Math.round(rect.top + rect.height/2)];
     recordClickAction(e.target, 'click');
   }
 
-  // Fallback: capture mousedown for dropdowns/popups that suppress click events
+  // Fallback: capture mousedown ONLY for elements where click never fires
+  // (e.g., custom dropdown options that suppress click events)
   function onMouseDown(e) {
-    // Only record left clicks
     if (e.button !== 0) return;
-    // Skip overlay elements
     if (e.target === banner || e.target === highlight || e.target === tooltip) return;
     if (e.target && e.target.closest && e.target.closest('#__dashsnap_macro_banner')) return;
     if (e.target && e.target.closest && e.target.closest('#__dashsnap_text_prompt')) return;
-    // The click handler will fire ~100ms later for normal clicks.
-    // For suppressed clicks (dropdown options), only mousedown fires.
-    // Use a short delay to let click handler take priority via dedup.
     var target = e.target;
+    var rect = target.getBoundingClientRect();
+    var mxy = [Math.round(rect.left + rect.width/2), Math.round(rect.top + rect.height/2)];
     setTimeout(function() {
+      // Only record if no click event fired for this interaction
+      if (Date.now() - lastClickAt < 300 && nearXY(mxy, lastClickXY)) return;
       recordClickAction(target, 'mousedown');
-    }, 150);
+    }, 200);
   }
 
   // Capture select/dropdown changes
