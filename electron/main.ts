@@ -76,20 +76,28 @@ function ensureDir(dirPath: string) {
 
 // ─── Splash screen ──────────────────────────────────────────────────────────
 
+function splashProgress(percent: number, message: string) {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.webContents.send('splash:progress', percent, message);
+  }
+}
+
 function showSplash() {
   splashWindow = new BrowserWindow({
-    width: 360,
-    height: 400,
+    width: 320,
+    height: 280,
     frame: false,
     resizable: false,
     alwaysOnTop: true,
     center: true,
-    skipTaskbar: true,
-    show: true, // show immediately — don't wait for ready-to-show
-    backgroundColor: '#13111C', // solid bg so it paints instantly (no compositing delay)
+    skipTaskbar: false,
+    transparent: false,
+    show: true,
+    backgroundColor: '#13111C',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, 'splash-preload.cjs'),
     },
   });
 
@@ -104,8 +112,15 @@ function showSplash() {
 
 function closeSplash() {
   if (splashWindow && !splashWindow.isDestroyed()) {
-    splashWindow.close();
-    splashWindow = null;
+    splashProgress(100, 'Ready!');
+    splashWindow.webContents.send('splash:closing');
+    // Wait for fade-out animation then close
+    setTimeout(() => {
+      if (splashWindow && !splashWindow.isDestroyed()) {
+        splashWindow.close();
+        splashWindow = null;
+      }
+    }, 350);
   }
 }
 
@@ -151,6 +166,8 @@ function createWindow() {
     path.join(appDataPath, 'browser_profile');
   ensureDir(browserProfilePath);
 
+  splashProgress(40, 'Setting up browser...');
+
   // Redirect session storage to our stable data folder so cookies,
   // certificates, and auth tokens persist across launches
   app.setPath('sessionData', browserProfilePath);
@@ -174,11 +191,15 @@ function createWindow() {
   mainWindow.setBrowserView(browserView);
   positionBrowserView();
 
+  splashProgress(55, 'Initializing modules...');
+
   // Initialize modules
   browserManager = new BrowserManager(browserView, mainWindow);
   recorder = new Recorder(browserView, mainWindow);
   flowRunner = new FlowRunner(browserView, mainWindow, configManager);
   pptxBuilder = new PptxBuilder(configManager);
+
+  splashProgress(65, 'Loading interface...');
 
   // Load start URL
   const startUrl = settings.startUrl || 'about:blank';
@@ -703,9 +724,11 @@ app.on('ready', () => {
 });
 
 app.whenReady().then(() => {
-  // Heavy init — splash is already visible by now
+  splashProgress(10, 'Loading configuration...');
   setupIPC();
+  splashProgress(30, 'Creating window...');
   createWindow();
+  splashProgress(80, 'Checking for updates...');
   setupAutoUpdater();
 
   app.on('activate', () => {

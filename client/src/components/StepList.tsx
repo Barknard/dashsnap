@@ -54,10 +54,12 @@ function stepDetail(step: FlowStep): string {
       const clicks = types.filter(t => t === 'click').length;
       const typed = types.filter(t => t === 'type').length;
       const scrolls = types.filter(t => t === 'scroll').length;
+      const snaps = types.filter(t => t === 'snap').length;
       const parts = [];
       if (clicks) parts.push(`${clicks} click${clicks > 1 ? 's' : ''}`);
       if (typed) parts.push(`${typed} input${typed > 1 ? 's' : ''}`);
       if (scrolls) parts.push(`${scrolls} scroll${scrolls > 1 ? 's' : ''}`);
+      if (snaps) parts.push(`${snaps} snap${snaps > 1 ? 's' : ''}`);
       return `${step.actions.length} actions (${parts.join(', ') || 'empty'})`;
     }
     default: return '';

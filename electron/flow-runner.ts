@@ -275,7 +275,7 @@ export class FlowRunner {
           break;
 
         case 'MACRO':
-          result.status = await this.executeMacro(step);
+          result.status = await this.executeMacro(step, outputDir, screenshots);
           break;
       }
     } catch (err) {
@@ -645,6 +645,8 @@ export class FlowRunner {
 
   private async executeMacro(
     step: MacroStep,
+    outputDir?: string,
+    screenshots?: Array<{ name: string; path: string; slideLayout?: PptxLayout }>,
   ): Promise<'success' | 'warning'> {
     const wc = this.view.webContents;
     const waitBetween = step.waitBetween ?? 500;
@@ -728,6 +730,33 @@ export class FlowRunner {
                   if (el) { el.scrollTop = ${action.scrollTarget.y}; el.scrollLeft = ${action.scrollTarget.x}; }
                 })()
               `).catch(() => {});
+            }
+          }
+          break;
+        }
+
+        case 'snap': {
+          if (action.snapRegion && outputDir && screenshots) {
+            try {
+              const image = await this.view.webContents.capturePage({
+                x: action.snapRegion.x,
+                y: action.snapRegion.y,
+                width: action.snapRegion.width,
+                height: action.snapRegion.height,
+              });
+              const varSuffix = Object.keys(this.currentVariables).length > 0
+                ? '_' + Object.values(this.currentVariables).join('_').replace(/[^a-zA-Z0-9_-]/g, '')
+                : '';
+              const filename = `snap_${String(screenshots.length + 1).padStart(2, '0')}${varSuffix}.png`;
+              const filePath = path.join(outputDir, filename);
+              fs.writeFileSync(filePath, image.toPNG());
+              screenshots.push({
+                name: action.label || 'Macro Screenshot',
+                path: filePath,
+                slideLayout: action.slideLayout,
+              });
+            } catch (err) {
+              console.error('Macro snap failed:', err);
             }
           }
           break;

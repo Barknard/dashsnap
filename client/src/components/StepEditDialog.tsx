@@ -481,7 +481,7 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
                     {macroActions.map((action, i) => {
                       const isInput = action.action === 'type' || action.action === 'select';
                       const actionColors: Record<string, string> = {
-                        click: 'ds-accent', type: 'ds-cyan', select: 'ds-amber', scroll: 'ds-text-dim',
+                        click: 'ds-accent', type: 'ds-cyan', select: 'ds-amber', scroll: 'ds-text-dim', snap: 'ds-emerald',
                       };
                       const color = actionColors[action.action] || 'ds-text-muted';
                       return (

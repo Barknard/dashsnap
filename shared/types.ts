@@ -122,13 +122,20 @@ export interface MacroAction {
   fallbackXY?: [number, number];
   selectorStrategy?: string;
   label?: string;
-  action: 'click' | 'type' | 'select' | 'scroll';
+  action: 'click' | 'type' | 'select' | 'scroll' | 'snap';
   value?: string;            // for type/select — supports {{variable}}
   scrollTarget?: {           // for scroll actions
     x: number;
     y: number;
     isPage: boolean;         // true = window scroll, false = element scroll
   };
+  snapRegion?: {             // for snap actions
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  slideLayout?: PptxLayout;  // optional per-snap slide layout
   elementMeta?: {
     tagName: string;
     inputType?: string;      // e.g. 'text', 'search', 'email'

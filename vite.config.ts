@@ -44,6 +44,21 @@ export default defineConfig({
           },
         },
       },
+      {
+        entry: path.resolve(__dirname, 'electron/splash-preload.ts'),
+        vite: {
+          build: {
+            outDir: path.resolve(__dirname, 'dist-electron'),
+            rollupOptions: {
+              external: ['electron'],
+              output: {
+                format: 'cjs',
+                entryFileNames: '[name].cjs',
+              },
+            },
+          },
+        },
+      },
     ]),
     electronRenderer(),
   ],

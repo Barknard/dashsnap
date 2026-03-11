@@ -17,23 +17,36 @@
     }
 
     .logo {
-      width: 72px; height: 72px;
+      width: 64px; height: 64px;
       background: linear-gradient(135deg, #7C5CFC, #22D3EE);
-      border-radius: 18px;
+      border-radius: 16px;
       display: flex; align-items: center; justify-content: center;
       box-shadow: 0 8px 32px rgba(124, 92, 252, 0.3);
-      animation: float 2s ease-in-out infinite;
     }
-    .logo svg { width: 36px; height: 36px; fill: white; }
+    .logo svg { width: 32px; height: 32px; }
 
-    @keyframes float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-6px); }
+    /* Spinner ring around logo */
+    .logo-wrap {
+      position: relative;
+      width: 80px; height: 80px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .spinner {
+      position: absolute;
+      inset: 0;
+      border: 2px solid transparent;
+      border-top-color: #7C5CFC;
+      border-right-color: #22D3EE;
+      border-radius: 50%;
+      animation: spin 1.2s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
 
     h1 {
-      margin-top: 20px;
-      font-size: 28px;
+      margin-top: 16px;
+      font-size: 24px;
       font-weight: 700;
       letter-spacing: -0.5px;
       background: linear-gradient(135deg, #EEEDF5, #A9A5BE);
@@ -41,15 +54,9 @@
       -webkit-text-fill-color: transparent;
     }
 
-    .tagline {
-      margin-top: 6px;
-      font-size: 13px;
-      color: #716D87;
-    }
-
     .loader {
-      margin-top: 32px;
-      width: 180px; height: 4px;
+      margin-top: 24px;
+      width: 200px; height: 3px;
       background: #262435;
       border-radius: 2px;
       overflow: hidden;
@@ -59,56 +66,61 @@
       height: 100%;
       background: linear-gradient(90deg, #7C5CFC, #22D3EE);
       border-radius: 2px;
-      animation: fill 6s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
-    }
-    @keyframes fill {
-      0% { width: 0%; }
-      15% { width: 25%; }
-      40% { width: 50%; }
-      65% { width: 70%; }
-      85% { width: 85%; }
-      100% { width: 95%; }
+      transition: width 0.4s ease-out;
     }
 
     .status {
-      margin-top: 14px;
+      margin-top: 12px;
       font-size: 11px;
-      color: #4A4560;
+      color: #716D87;
+      transition: opacity 0.2s;
+      min-height: 16px;
     }
 
     .version {
       position: absolute;
-      bottom: 16px;
-      font-size: 10px;
+      bottom: 12px;
+      font-size: 9px;
       color: #332F45;
+    }
+
+    /* Fade-out when done */
+    body.closing {
+      animation: fadeOut 0.3s ease-out forwards;
+    }
+    @keyframes fadeOut {
+      to { opacity: 0; transform: scale(0.96); }
     }
   </style>
 </head>
 <body>
-  <div class="logo">
-    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
-      <circle cx="12" cy="13" r="3"/>
-    </svg>
+  <div class="logo-wrap">
+    <div class="spinner"></div>
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+        <circle cx="12" cy="13" r="3"/>
+      </svg>
+    </div>
   </div>
   <h1>DashSnap</h1>
-  <p class="tagline">Dashboard to Deck</p>
-  <div class="loader"><div class="loader-bar"></div></div>
-  <p class="status" id="status">Initializing...</p>
-  <p class="version">v1.11.0</p>
+  <div class="loader"><div class="loader-bar" id="bar"></div></div>
+  <p class="status" id="status">Starting up...</p>
+  <p class="version">v1.11.1</p>
   <script>
-    const messages = [
-      [0, 'Initializing...'],
-      [800, 'Loading modules...'],
-      [2000, 'Setting up browser...'],
-      [3500, 'Preparing workspace...'],
-      [5000, 'Almost ready...'],
-    ];
-    messages.forEach(([delay, text]) => {
-      setTimeout(() => {
-        document.getElementById('status').textContent = text;
-      }, delay);
-    });
+    const bar = document.getElementById('bar');
+    const status = document.getElementById('status');
+
+    // Listen for progress updates from the main process
+    if (window.dashsnapSplash) {
+      window.dashsnapSplash.onProgress((percent, message) => {
+        bar.style.width = percent + '%';
+        if (message) status.textContent = message;
+      });
+      window.dashsnapSplash.onClosing(() => {
+        document.body.classList.add('closing');
+      });
+    }
   </script>
 </body>
 </html>

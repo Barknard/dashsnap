@@ -589,8 +589,10 @@ const MACRO_OVERLAY_JS = `
     const count = window.__dashsnap_macro_actions.length;
     banner.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;animation:pulse 1s infinite;display:inline-block"></span> '
       + '<span style="color:#7C5CFC;font-weight:700">MACRO</span> — '
-      + count + ' action' + (count !== 1 ? 's' : '') + ' recorded · '
-      + '<kbd data-macro-done="true" style="background:#333;padding:2px 6px;border-radius:3px;font-size:11px;cursor:pointer;user-select:none">Enter</kbd> to finish';
+      + count + ' action' + (count !== 1 ? 's' : '') + ' · '
+      + '<kbd style="background:#333;padding:2px 6px;border-radius:3px;font-size:10px">S</kbd> snap · '
+      + '<kbd style="background:#333;padding:2px 6px;border-radius:3px;font-size:10px">R</kbd> region · '
+      + '<kbd data-macro-done="true" style="background:#333;padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;user-select:none">Enter</kbd> done';
   }
   updateBanner();
 
@@ -683,7 +685,74 @@ const MACRO_OVERLAY_JS = `
     updateBanner();
   }
 
+  // Region-draw mode for screenshots
+  let drawingRegion = false;
+  let regionCanvas = null;
+  let regionStartX = 0, regionStartY = 0;
+
+  function startRegionDraw() {
+    drawingRegion = true;
+    highlight.style.display = 'none';
+    regionCanvas = document.createElement('canvas');
+    regionCanvas.width = window.innerWidth;
+    regionCanvas.height = window.innerHeight;
+    regionCanvas.style.cssText = 'position:fixed;top:0;left:0;z-index:2147483647;cursor:crosshair;';
+    document.body.appendChild(regionCanvas);
+
+    const ctx = regionCanvas.getContext('2d');
+    let drawing = false;
+
+    regionCanvas.addEventListener('mousedown', function(ev) {
+      regionStartX = ev.clientX;
+      regionStartY = ev.clientY;
+      drawing = true;
+    });
+    regionCanvas.addEventListener('mousemove', function(ev) {
+      if (!drawing) return;
+      ctx.clearRect(0, 0, regionCanvas.width, regionCanvas.height);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(0, 0, regionCanvas.width, regionCanvas.height);
+      const x = Math.min(regionStartX, ev.clientX);
+      const y = Math.min(regionStartY, ev.clientY);
+      const w = Math.abs(ev.clientX - regionStartX);
+      const h = Math.abs(ev.clientY - regionStartY);
+      ctx.clearRect(x, y, w, h);
+      ctx.strokeStyle = '#22D3EE';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 3]);
+      ctx.strokeRect(x, y, w, h);
+    });
+    regionCanvas.addEventListener('mouseup', function(ev) {
+      if (!drawing) return;
+      drawing = false;
+      const x = Math.min(regionStartX, ev.clientX);
+      const y = Math.min(regionStartY, ev.clientY);
+      const w = Math.abs(ev.clientX - regionStartX);
+      const h = Math.abs(ev.clientY - regionStartY);
+      regionCanvas.remove();
+      regionCanvas = null;
+      drawingRegion = false;
+      if (w >= 10 && h >= 10) {
+        window.__dashsnap_macro_actions.push({
+          action: 'snap',
+          label: 'Screenshot ' + Math.round(w) + 'x' + Math.round(h) + 'px',
+          snapRegion: { x: Math.round(x), y: Math.round(y), width: Math.round(w), height: Math.round(h) },
+        });
+        updateBanner();
+      }
+    });
+    regionCanvas.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Escape') {
+        regionCanvas.remove();
+        regionCanvas = null;
+        drawingRegion = false;
+      }
+    });
+  }
+
   function onKeyDown(e) {
+    if (drawingRegion) return;
+
     if (e.key === 'Enter' && (e.target === document.body || e.target === document.documentElement)) {
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -691,6 +760,27 @@ const MACRO_OVERLAY_JS = `
         window.__dashsnap_macro_done = true;
         cleanup();
       }
+    }
+    // S = snap hovered element
+    if ((e.key === 's' || e.key === 'S') && lastEl && lastEl !== banner && lastEl !== highlight) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const rect = lastEl.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        window.__dashsnap_macro_actions.push({
+          action: 'snap',
+          label: 'Snap: ' + getLabel(lastEl),
+          snapRegion: { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
+        });
+        flashElement(lastEl);
+        updateBanner();
+      }
+    }
+    // R = draw region screenshot
+    if (e.key === 'r' || e.key === 'R') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      startRegionDraw();
     }
     if (e.key === 'Escape') {
       window.__dashsnap_macro_cancelled = true;
