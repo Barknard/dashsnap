@@ -335,10 +335,10 @@ function setupIPC() {
   ipcMain.on('recorder:stop', () => recorder?.stop());
 
   // Flow management
-  ipcMain.handle('flow:save', (_e, config) => configManager.saveFlows(config));
-  ipcMain.handle('flow:load', () => configManager.loadFlows());
+  ipcMain.handle('flow:save', (_e, config) => configManager?.saveFlows(config));
+  ipcMain.handle('flow:load', () => configManager?.loadFlows());
   ipcMain.handle('flow:export', async (_e, flowId: string) => {
-    const flows = configManager.loadFlows();
+    const flows = configManager?.loadFlows();
     const flow = flows.flows.find((f: { id: string }) => f.id === flowId);
     if (!flow || !mainWindow) return;
     const result = await dialog.showSaveDialog(mainWindow, {
@@ -403,9 +403,9 @@ function setupIPC() {
     pptxBuilder?.build(flowId, screenshots));
 
   // Settings
-  ipcMain.handle('settings:load', () => configManager.loadSettings());
+  ipcMain.handle('settings:load', () => configManager?.loadSettings());
   ipcMain.handle('settings:save', (_e, settings) => {
-    configManager.saveSettings(settings);
+    configManager?.saveSettings(settings);
     // Apply sidebar width change
     if (settings.sidebarWidth && settings.sidebarWidth !== sidebarWidth) {
       sidebarWidth = settings.sidebarWidth;
@@ -464,7 +464,7 @@ function setupIPC() {
 
   // List output files (screenshots + pptx)
   ipcMain.handle('app:list-outputs', () => {
-    const outputDir = configManager.loadSettings().outputPath ||
+    const outputDir = configManager?.loadSettings()?.outputPath ||
       path.join(getAppDataPath(), 'output');
     if (!fs.existsSync(outputDir)) return [];
     const files = fs.readdirSync(outputDir)

@@ -628,7 +628,6 @@ const MACRO_OVERLAY_JS = `
 
   // Scroll tracking (debounced)
   let scrollTimer = null;
-  let lastScrollEl = null;
   let lastScrollX = window.scrollX;
   let lastScrollY = window.scrollY;
   function onScroll(e) {
@@ -676,6 +675,10 @@ const MACRO_OVERLAY_JS = `
       if (window.__dashsnap_macro_actions.length > 0) {
         window.__dashsnap_macro_done = true;
         cleanup();
+      } else {
+        banner.style.borderColor = '#EF4444';
+        banner.style.transition = 'border-color 0.3s';
+        setTimeout(function() { banner.style.borderColor = '#7C5CFC'; }, 800);
       }
       return;
     }
@@ -816,6 +819,7 @@ export class Recorder {
   private window: BrowserWindow;
   private pollInterval: ReturnType<typeof setInterval> | null = null;
   private _macroNavHandler: (() => void) | null = null;
+  private _macroStartUrl: string = '';
 
   constructor(view: BrowserView, window: BrowserWindow) {
     this.view = view;
@@ -868,6 +872,7 @@ export class Recorder {
 
   async startMacroRecording() {
     this.stopPolling();
+    this._macroStartUrl = this.view.webContents.getURL();
     await this.view.webContents.executeJavaScript(MACRO_OVERLAY_JS);
     // Re-inject overlay after page navigation so highlight persists
     this._macroNavHandler = () => {
@@ -1010,7 +1015,7 @@ export class Recorder {
           const actions = await this.view.webContents.executeJavaScript(
             'JSON.parse(JSON.stringify(window.__dashsnap_macro_actions))'
           );
-          const startUrl = this.view.webContents.getURL();
+          const startUrl = this._macroStartUrl || this.view.webContents.getURL();
           await this.view.webContents.executeJavaScript(`
             window.__dashsnap_macro_done = false;
             window.__dashsnap_macro_actions = [];
