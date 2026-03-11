@@ -560,6 +560,13 @@ const MACRO_OVERLAY_JS = `
     return false;
   }
 
+  // Inject inspect-style cursor
+  const style = document.createElement('style');
+  style.id = '__dashsnap_macro_style';
+  style.textContent = '.__dashsnap_macro_inspecting, .__dashsnap_macro_inspecting * { cursor: crosshair !important; }';
+  document.head.appendChild(style);
+  document.documentElement.classList.add('__dashsnap_macro_inspecting');
+
   // Banner
   const banner = document.createElement('div');
   banner.id = '__dashsnap_macro_banner';
@@ -569,8 +576,14 @@ const MACRO_OVERLAY_JS = `
   // Highlight
   const highlight = document.createElement('div');
   highlight.id = '__dashsnap_macro_highlight';
-  highlight.style.cssText = 'position:fixed;z-index:2147483646;border:3px solid #7C5CFC;background:rgba(124,92,252,0.18);border-radius:4px;pointer-events:none;display:none;transition:all 0.05s ease;box-shadow:0 0 8px rgba(124,92,252,0.4);';
+  highlight.style.cssText = 'position:fixed;z-index:2147483646;border:2px solid #7C5CFC;background:rgba(124,92,252,0.12);border-radius:3px;pointer-events:none;display:none;transition:all 0.05s ease;';
   document.body.appendChild(highlight);
+
+  // Tooltip (follows cursor like Chrome inspect element)
+  const tooltip = document.createElement('div');
+  tooltip.id = '__dashsnap_macro_tooltip';
+  tooltip.style.cssText = 'position:fixed;z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:12px system-ui;padding:6px 10px;border-radius:6px;border:1px solid #7C5CFC;pointer-events:none;display:none;max-width:250px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+  document.body.appendChild(tooltip);
 
   function flashElement(el) {
     const flash = document.createElement('div');
@@ -596,10 +609,22 @@ const MACRO_OVERLAY_JS = `
   }
   updateBanner();
 
+  function getSimpleLabel(el) {
+    const tag = el.tagName.toLowerCase();
+    const text = (el.textContent || '').trim().substring(0, 30);
+    const ariaLabel = el.getAttribute('aria-label');
+    const role = el.getAttribute('role');
+    if (ariaLabel) return ariaLabel;
+    if (role && text) return text;
+    const typeMap = { button:'Button', a:'Link', input:'Input', select:'Dropdown', textarea:'Text area', img:'Image', svg:'Icon' };
+    const prefix = typeMap[tag] || tag;
+    return text ? prefix + ': ' + text : prefix;
+  }
+
   let lastEl = null;
   function onMouseMove(e) {
     const el = e.target;
-    if (!el || el === banner || el === highlight || el.closest('#__dashsnap_macro_banner')) return;
+    if (!el || el === banner || el === highlight || el === tooltip || el.closest('#__dashsnap_macro_banner')) return;
     if (el === lastEl) return;
     lastEl = el;
     const rect = el.getBoundingClientRect();
@@ -608,6 +633,10 @@ const MACRO_OVERLAY_JS = `
     highlight.style.top = rect.top + 'px';
     highlight.style.width = rect.width + 'px';
     highlight.style.height = rect.height + 'px';
+    tooltip.textContent = getSimpleLabel(el);
+    tooltip.style.display = 'block';
+    tooltip.style.left = Math.min(e.clientX + 12, window.innerWidth - 260) + 'px';
+    tooltip.style.top = (e.clientY - 35) + 'px';
   }
 
   // Scroll tracking (debounced)
@@ -693,6 +722,7 @@ const MACRO_OVERLAY_JS = `
   function startRegionDraw() {
     drawingRegion = true;
     highlight.style.display = 'none';
+    tooltip.style.display = 'none';
     regionCanvas = document.createElement('canvas');
     regionCanvas.width = window.innerWidth;
     regionCanvas.height = window.innerHeight;
@@ -801,8 +831,11 @@ const MACRO_OVERLAY_JS = `
     document.removeEventListener('keydown', onKeyDown, true);
     document.removeEventListener('scroll', onScroll, true);
     window.removeEventListener('scroll', onScroll, true);
+    document.documentElement.classList.remove('__dashsnap_macro_inspecting');
+    style.remove();
     banner.remove();
     highlight.remove();
+    tooltip.remove();
     window.__dashsnap_macro_active = false;
   }
 
