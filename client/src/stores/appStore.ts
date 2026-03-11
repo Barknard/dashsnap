@@ -41,8 +41,8 @@ interface AppStore {
   setUpdateDownloadComplete: (filePath: string) => void;
 
   // UI
-  activeTab: 'record' | 'run' | 'output';
-  setActiveTab: (tab: 'record' | 'run' | 'output') => void;
+  activeTab: 'record' | 'output';
+  setActiveTab: (tab: 'record' | 'output') => void;
   showSettings: boolean;
   setShowSettings: (show: boolean) => void;
 }

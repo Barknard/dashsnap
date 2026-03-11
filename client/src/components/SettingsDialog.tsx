@@ -1,19 +1,23 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Switch from '@radix-ui/react-switch';
+import * as Slider from '@radix-ui/react-slider';
 import {
   Settings, FolderOpen, FileText, Globe, Lightbulb,
   RefreshCw, X, Heart, Download, CheckCircle, AlertCircle, ExternalLink, Loader2,
-  Layout, Maximize2, RotateCw,
+  Layout, Maximize2, RotateCw, Clock,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { useAppStore } from '@/stores/appStore';
+import { useFlowStore } from '@/stores/flowStore';
 import { settings as settingsIpc, app as appIpc } from '@/lib/ipc';
 
 export function SettingsDialog() {
   const showSettings = useAppStore(s => s.showSettings);
   const setShowSettings = useAppStore(s => s.setShowSettings);
   const currentSettings = useAppStore(s => s.settings);
+  const defaults = useFlowStore(s => s.defaults);
+  const setStepWait = useFlowStore(s => s.setStepWait);
   const saveSettings = useAppStore(s => s.saveSettings);
   const version = useAppStore(s => s.version);
   const updateStatus = useAppStore(s => s.updateStatus);
@@ -141,6 +145,44 @@ export function SettingsDialog() {
                   Browse
                 </Button>
               </div>
+            </div>
+
+            {/* Time Between Steps */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-ds-text flex items-center gap-1.5">
+                <Clock className="w-3 h-3 text-ds-amber" />
+                Time Between Steps
+              </label>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-ds-text-muted">Wait after each step</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={defaults.stepWaitSeconds}
+                    onChange={e => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v) && v >= 1 && v <= 60) setStepWait(v);
+                    }}
+                    className="w-10 h-5 px-1 text-xs font-mono font-bold text-ds-accent text-right bg-ds-bg border border-ds-border rounded focus:outline-none focus:border-ds-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <span className="text-xs text-ds-text-dim">s</span>
+                </div>
+              </div>
+              <Slider.Root
+                value={[Math.min(defaults.stepWaitSeconds, 20)]}
+                onValueChange={([v]) => setStepWait(v)}
+                min={1}
+                max={20}
+                step={1}
+                className="relative flex items-center h-5 w-full"
+              >
+                <Slider.Track className="relative h-1.5 w-full rounded-full bg-ds-bg">
+                  <Slider.Range className="absolute h-full rounded-full bg-gradient-to-r from-ds-accent to-ds-cyan" />
+                </Slider.Track>
+                <Slider.Thumb className="block w-4 h-4 rounded-full bg-white border-2 border-ds-accent shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-ds-accent/50 cursor-grab active:cursor-grabbing transition-shadow" />
+              </Slider.Root>
             </div>
 
             {/* PPTX Layout */}

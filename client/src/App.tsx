@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Dialog from '@radix-ui/react-dialog';
-import { CircleDot, Play, Tag, Images } from 'lucide-react';
+import { CircleDot, Tag, Images } from 'lucide-react';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { Header } from './components/Header';
 import { UrlBar } from './components/UrlBar';
 import { FlowMenu } from './components/FlowMenu';
 import { FlowPicker } from './components/FlowPicker';
 import { RecordPanel } from './components/RecordPanel';
-import { RunPanel } from './components/RunPanel';
 import { OutputGallery } from './components/OutputGallery';
 import { SettingsDialog } from './components/SettingsDialog';
 import { StepEditDialog } from './components/StepEditDialog';
@@ -372,7 +371,6 @@ export default function App() {
 
   const tabs = [
     { id: 'record', label: 'Record', icon: CircleDot },
-    { id: 'run', label: 'Run', icon: Play },
     { id: 'output', label: 'Output', icon: Images },
   ] as const;
 
@@ -411,11 +409,7 @@ export default function App() {
                   <RecordPanel onEditStep={setEditingStep} />
                 </Tabs.Content>
 
-                <Tabs.Content value="run" className="h-full">
-                  <RunPanel />
-                </Tabs.Content>
-
-                <Tabs.Content value="output" className="h-full">
+<Tabs.Content value="output" className="h-full">
                   <OutputGallery />
                 </Tabs.Content>
               </div>

@@ -1,8 +1,11 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import * as Progress from '@radix-ui/react-progress';
 import {
   Timer, Globe, ArrowDownToLine,
-  Plus, Clapperboard,
+  Plus, Clapperboard, Play, Square,
+  CheckCircle2, AlertTriangle, XCircle, Clock,
+  FlaskConical, Sparkles, Presentation, FolderOpen,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -11,9 +14,20 @@ import { RecordingOverlay } from './RecordingOverlay';
 import { StepList } from './StepList';
 import { useFlowStore } from '@/stores/flowStore';
 import { useAppStore } from '@/stores/appStore';
-import { recorder } from '@/lib/ipc';
-import { generateId } from '@/lib/utils';
-import type { FlowStep } from '@shared/types';
+import { recorder, flow as flowIpc, app as appIpc } from '@/lib/ipc';
+import { generateId, formatDuration, cn } from '@/lib/utils';
+import type { FlowStep, RunStepStatus, RunProgress } from '@shared/types';
+
+function StatusIcon({ status }: { status: RunStepStatus }) {
+  switch (status) {
+    case 'success': return <CheckCircle2 className="w-3.5 h-3.5 text-ds-emerald" />;
+    case 'warning': return <AlertTriangle className="w-3.5 h-3.5 text-ds-amber" />;
+    case 'error': return <XCircle className="w-3.5 h-3.5 text-ds-red" />;
+    case 'running': return <Clock className="w-3.5 h-3.5 text-ds-accent animate-pulse" />;
+    case 'skipped': return <Clock className="w-3.5 h-3.5 text-ds-text-dim" />;
+    default: return <div className="w-3.5 h-3.5 rounded-full border border-ds-border" />;
+  }
+}
 
 interface RecordPanelProps {
   onEditStep?: (step: FlowStep) => void;
@@ -23,14 +37,54 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
   const activeFlow = useFlowStore(s => s.getActiveFlow());
   const addStep = useFlowStore(s => s.addStep);
   const defaults = useFlowStore(s => s.defaults);
+  const selectedStepIndex = useFlowStore(s => s.selectedStepIndex);
   const isRecording = useAppStore(s => s.isRecording);
   const recordingType = useAppStore(s => s.recordingType);
   const startRecording = useAppStore(s => s.startRecording);
+  const runProgress = useAppStore(s => s.runProgress);
+  const isRunning = useAppStore(s => s.isRunning);
+  const setRunProgress = useAppStore(s => s.setRunProgress);
 
   const [navUrl, setNavUrl] = useState('');
   const [scrollX, setScrollX] = useState('0');
   const [scrollY, setScrollY] = useState('0');
   const [waitSeconds, setWaitSeconds] = useState(String(defaults.stepWaitSeconds));
+  const [elapsed, setElapsed] = useState(0);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Listen for progress updates
+  useEffect(() => {
+    const handler = (progress: unknown) => {
+      const p = progress as RunProgress;
+      setRunProgress(p);
+      if (p.status === 'complete') {
+        setShowCelebration(true);
+        setTimeout(() => setShowCelebration(false), 3000);
+      }
+    };
+    flowIpc.onProgress(handler);
+    return () => flowIpc.offProgress(handler as (...args: unknown[]) => void);
+  }, [setRunProgress]);
+
+  // Elapsed timer
+  useEffect(() => {
+    if (isRunning) {
+      setElapsed(0);
+      timerRef.current = setInterval(() => setElapsed(e => e + 1000), 1000);
+    } else if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isRunning]);
+
+  const progressPercent = runProgress
+    ? Math.round((runProgress.currentStep / runProgress.totalSteps) * 100)
+    : 0;
+  const isComplete = runProgress?.status === 'complete';
+  const hasError = runProgress?.status === 'error';
+  const snapCount = runProgress?.results.filter(r => r.screenshotPath).length ?? 0;
 
   const handleRecordMacro = () => {
     if (!activeFlow) return;
@@ -231,6 +285,126 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
           </p>
         </div>
       )}
+
+      {/* Spacer to push run footer to bottom */}
+      <div className="flex-1" />
+
+      {/* Run footer */}
+      <div className="border-t border-ds-border pt-3 space-y-2">
+        {/* Progress section */}
+        <AnimatePresence>
+          {runProgress && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <Card className={cn(
+                'p-3 space-y-2',
+                isComplete && 'border-ds-emerald/30 bg-ds-emerald/5',
+                hasError && 'border-ds-red/30 bg-ds-red/5',
+              )}>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-ds-text">
+                      {isComplete ? 'Complete!' : hasError ? 'Error' : `Step ${runProgress.currentStep + 1} of ${runProgress.totalSteps}`}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono text-ds-text-muted">{formatDuration(elapsed)}</span>
+                      <span className="text-xs font-bold text-ds-accent">{progressPercent}%</span>
+                    </div>
+                  </div>
+                  <Progress.Root className="h-1.5 w-full overflow-hidden rounded-full bg-ds-bg">
+                    <Progress.Indicator
+                      className={cn(
+                        'h-full rounded-full transition-all duration-500 ease-out',
+                        isComplete ? 'bg-ds-emerald' : hasError ? 'bg-ds-red' : 'bg-gradient-to-r from-ds-accent to-ds-cyan',
+                      )}
+                      style={{ width: `${isComplete ? 100 : progressPercent}%` }}
+                    />
+                  </Progress.Root>
+                </div>
+
+                {/* Results */}
+                <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                  {runProgress.results.map((result, i) => (
+                    <div key={result.stepId} className="flex items-center gap-2 px-1">
+                      <StatusIcon status={result.status} />
+                      <span className="text-xs text-ds-text-muted truncate flex-1">
+                        {activeFlow?.steps[i]?.label || `Step ${i + 1}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {isComplete && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Sparkles className="w-3.5 h-3.5 text-ds-emerald" />
+                    <span className="text-xs font-semibold text-ds-emerald">
+                      {snapCount} snap{snapCount !== 1 ? 's' : ''} in {formatDuration(elapsed)}
+                    </span>
+                    <div className="flex-1" />
+                    <Button variant="success" size="sm" onClick={() => appIpc.openPath('')}>
+                      <FolderOpen className="w-3 h-3" />
+                    </Button>
+                  </div>
+                )}
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Run / Stop buttons */}
+        {!isRunning ? (
+          <div className="flex gap-2">
+            <motion.div className="flex-1" whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
+              <Button
+                variant="success"
+                size="lg"
+                className="w-full font-bold shadow-lg shadow-ds-emerald/20"
+                onClick={() => activeFlow && flowIpc.run(activeFlow.id)}
+                disabled={noFlow || !activeFlow?.steps.length || isRecording}
+              >
+                <Play className="w-4 h-4 mr-1" />
+                Run Flow
+              </Button>
+            </motion.div>
+            {selectedStepIndex !== null && (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => activeFlow && flowIpc.runStep(activeFlow.id, selectedStepIndex)}
+                disabled={noFlow}
+                title="Test selected step"
+              >
+                <FlaskConical className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        ) : (
+          <Button
+            variant="destructive"
+            size="lg"
+            className="w-full font-bold"
+            onClick={() => flowIpc.stop()}
+          >
+            <Square className="w-4 h-4 mr-1" />
+            Stop
+          </Button>
+        )}
+      </div>
+
+      {/* Celebration flash */}
+      <AnimatePresence>
+        {showCelebration && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 pointer-events-none z-50 bg-ds-emerald/5 rounded-lg"
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
