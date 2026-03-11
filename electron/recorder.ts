@@ -528,12 +528,43 @@ const MACRO_OVERLAY_JS = `
     function unique(sel) {
       try { return document.querySelectorAll(sel).length === 1; } catch(e) { return false; }
     }
+
+    // Build a CSS path using nth-child — works for ANY element, always unique
+    function buildDomPath(el) {
+      var parts = [];
+      var node = el;
+      while (node && node.nodeType === 1 && node !== document.documentElement) {
+        var tag = node.tagName.toLowerCase();
+        // If this node has a unique ID, anchor here and stop
+        if (node.id && !/^[:_]/.test(node.id) && node.id.length < 50) {
+          parts.unshift('#' + CSS.escape(node.id));
+          break;
+        }
+        // Find nth-child index
+        var parent = node.parentElement;
+        if (parent) {
+          var siblings = parent.children;
+          var idx = 1;
+          for (var i = 0; i < siblings.length; i++) {
+            if (siblings[i] === node) { idx = i + 1; break; }
+          }
+          parts.unshift(tag + ':nth-child(' + idx + ')');
+        } else {
+          parts.unshift(tag);
+        }
+        node = parent;
+      }
+      return parts.join(' > ');
+    }
+
     return function getBestSelector(el) {
+      // 0. aria-label
       var ariaLabel = el.getAttribute('aria-label');
       if (ariaLabel) {
         var sel = '[aria-label="' + cssEscapeVal(ariaLabel) + '"]';
         if (unique(sel)) return { selector: sel, strategy: 'aria-label' };
       }
+      // 1. Stable data attributes
       for (var i = 0; i < el.attributes.length; i++) {
         var attr = el.attributes[i];
         if (attr.name.startsWith('data-') && !UNSTABLE.has(attr.name)) {
@@ -543,15 +574,18 @@ const MACRO_OVERLAY_JS = `
           }
         }
       }
+      // 2. ID
       if (el.id && !/^[:_]/.test(el.id) && el.id.length < 50) {
         var sel = '#' + CSS.escape(el.id);
         if (unique(sel)) return { selector: sel, strategy: 'id' };
       }
+      // 3. name attribute
       var nameAttr = el.getAttribute('name');
       if (nameAttr) {
         var sel = el.tagName.toLowerCase() + '[name="' + cssEscapeVal(nameAttr) + '"]';
         if (unique(sel)) return { selector: sel, strategy: 'name' };
       }
+      // 4. role + text, links/buttons by text
       var text = (el.textContent || '').trim();
       if (text && text.length < 50) {
         var role = el.getAttribute('role');
@@ -575,6 +609,7 @@ const MACRO_OVERLAY_JS = `
           }
         }
       }
+      // 5. href for links
       if (el.tagName === 'A' && el.getAttribute('href')) {
         var href = el.getAttribute('href');
         if (href.length < 200) {
@@ -582,6 +617,7 @@ const MACRO_OVERLAY_JS = `
           if (unique(sel)) return { selector: sel, strategy: 'href' };
         }
       }
+      // 6. CSS class combo
       if (el.className && typeof el.className === 'string') {
         var classes = el.className.split(/\\s+/).filter(function(c) { return c && !c.startsWith('__'); }).slice(0, 2);
         if (classes.length > 0) {
@@ -589,7 +625,9 @@ const MACRO_OVERLAY_JS = `
           if (unique(sel)) return { selector: sel, strategy: 'css-combo' };
         }
       }
-      return { selector: '', strategy: 'xy-position' };
+      // 7. DOM path with nth-child — always produces a unique selector
+      var domPath = buildDomPath(el);
+      return { selector: domPath || '', strategy: 'dom-path' };
     };
   })();
 
