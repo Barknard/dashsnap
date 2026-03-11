@@ -2,7 +2,7 @@ import { BrowserView, BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { ConfigManager } from './config-manager';
-import type { Flow, FlowStep, PptxLayout, RunProgress, RunStepResult, SnapStep, SearchSelectStep, FilterStep } from '../shared/types';
+import type { Flow, FlowStep, PptxLayout, RunProgress, RunStepResult, SnapStep, SearchSelectStep, FilterStep, MacroStep } from '../shared/types';
 
 export class FlowRunner {
   private view: BrowserView;
@@ -272,6 +272,10 @@ export class FlowRunner {
 
         case 'FILTER':
           result.status = await this.executeFilter(step, defaults.clickWaitSeconds);
+          break;
+
+        case 'MACRO':
+          result.status = await this.executeMacro(step);
           break;
       }
     } catch (err) {
@@ -634,6 +638,103 @@ export class FlowRunner {
 
     if (step.clickOffAfter !== false) {
       await this.clickOff(wc);
+    }
+
+    return usedFallback ? 'warning' : 'success';
+  }
+
+  private async executeMacro(
+    step: MacroStep,
+  ): Promise<'success' | 'warning'> {
+    const wc = this.view.webContents;
+    const waitBetween = step.waitBetween ?? 500;
+    let usedFallback = false;
+
+    for (const action of step.actions) {
+      if (this.shouldStop) break;
+
+      switch (action.action) {
+        case 'click': {
+          const clicked = await this.clickSelector(wc, action.selector || '', action.fallbackXY);
+          if (!clicked) throw new Error(`Macro click failed: ${action.label || action.selector}`);
+          if (clicked === 'fallback') usedFallback = true;
+          break;
+        }
+
+        case 'type': {
+          const text = this.substituteVariables(action.value || '');
+          if (action.selector) {
+            const found = await wc.executeJavaScript(`
+              (function() {
+                const el = document.querySelector('${action.selector.replace(/'/g, "\\\\'")}');
+                if (el) { el.focus(); el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); return true; }
+                return false;
+              })()
+            `).catch(() => false);
+
+            if (found) {
+              for (const char of text) {
+                wc.sendInputEvent({ type: 'char', keyCode: char });
+                await this.delay(30);
+              }
+            } else if (action.fallbackXY) {
+              const [x, y] = action.fallbackXY;
+              wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+              wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+              await this.delay(200);
+              for (const char of text) {
+                wc.sendInputEvent({ type: 'char', keyCode: char });
+                await this.delay(30);
+              }
+              usedFallback = true;
+            }
+          }
+          break;
+        }
+
+        case 'select': {
+          const value = this.substituteVariables(action.value || '');
+          if (action.selector) {
+            await wc.executeJavaScript(`
+              (function() {
+                const el = document.querySelector('${action.selector.replace(/'/g, "\\\\'")}');
+                if (el && el.tagName === 'SELECT') {
+                  el.value = '${value.replace(/'/g, "\\\\'")}';
+                  el.dispatchEvent(new Event('change', { bubbles: true }));
+                } else if (el) {
+                  el.click();
+                }
+              })()
+            `).catch(() => {});
+          } else if (action.fallbackXY) {
+            const [x, y] = action.fallbackXY;
+            wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+            wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+            usedFallback = true;
+          }
+          break;
+        }
+
+        case 'scroll': {
+          if (action.scrollTarget) {
+            if (action.scrollTarget.isPage) {
+              await wc.executeJavaScript(
+                `window.scrollTo(${action.scrollTarget.x}, ${action.scrollTarget.y})`
+              );
+            } else if (action.selector) {
+              await wc.executeJavaScript(`
+                (function() {
+                  const el = document.querySelector('${action.selector.replace(/'/g, "\\\\'")}');
+                  if (el) { el.scrollTop = ${action.scrollTarget.y}; el.scrollLeft = ${action.scrollTarget.x}; }
+                })()
+              `).catch(() => {});
+            }
+          }
+          break;
+        }
+      }
+
+      await this.delay(waitBetween);
     }
 
     return usedFallback ? 'warning' : 'success';

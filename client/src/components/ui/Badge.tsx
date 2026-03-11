@@ -44,6 +44,7 @@ export function stepTypeBadgeVariant(type: string): BadgeProps['variant'] {
     case 'SCROLL_ELEMENT': return 'dim';
     case 'SEARCH_SELECT': return 'cyan';
     case 'FILTER': return 'amber';
+    case 'MACRO': return 'accent';
     default: return 'default';
   }
 }

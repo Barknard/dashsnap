@@ -106,6 +106,10 @@ export const recorder = {
     if (!isElectron) { warnNotElectron('recorder:start-filter'); return; }
     window.dashsnap!.send('recorder:start-filter');
   },
+  startMacro: () => {
+    if (!isElectron) { warnNotElectron('recorder:start-macro'); return; }
+    window.dashsnap!.send('recorder:start-macro');
+  },
   stop: () => {
     if (!isElectron) return;
     window.dashsnap!.send('recorder:stop');
@@ -137,6 +141,19 @@ export const recorder = {
   offFilterRecorded: (cb: (...args: unknown[]) => void) => {
     if (!isElectron) return;
     window.dashsnap!.off('recorder:filter-recorded', cb);
+  },
+  onMacroRecorded: (cb: (actions: Array<{
+    selector?: string; selectorStrategy?: string; fallbackXY?: [number, number];
+    label?: string; action: string; value?: string;
+    scrollTarget?: { x: number; y: number; isPage: boolean };
+    elementMeta?: { tagName: string; inputType?: string; placeholder?: string; options?: string[] };
+  }>) => void) => {
+    if (!isElectron) return;
+    window.dashsnap!.on('recorder:macro-recorded', cb as (...args: unknown[]) => void);
+  },
+  offMacroRecorded: (cb: (...args: unknown[]) => void) => {
+    if (!isElectron) return;
+    window.dashsnap!.off('recorder:macro-recorded', cb);
   },
   onCancelled: (cb: () => void) => {
     if (!isElectron) return;

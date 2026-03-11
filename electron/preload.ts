@@ -21,7 +21,7 @@ contextBridge.exposeInMainWorld('dashsnap', {
       'browser:highlight-element', 'browser:clear-highlight',
       'recorder:start-click', 'recorder:start-snap', 'recorder:start-screenshot',
       'recorder:start-hover', 'recorder:start-select', 'recorder:start-type', 'recorder:start-scroll-element',
-      'recorder:start-search-select', 'recorder:start-filter',
+      'recorder:start-search-select', 'recorder:start-filter', 'recorder:start-macro',
       'recorder:stop',
       'flow:run', 'flow:run-step', 'flow:run-batch', 'flow:stop',
       'app:check-update', 'app:install-update', 'app:download-update', 'app:apply-update',
@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('dashsnap', {
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     const allowedOn = [
       'browser:url-changed', 'browser:title-changed', 'browser:loading',
-      'recorder:element-picked', 'recorder:region-selected', 'recorder:filter-recorded', 'recorder:cancelled',
+      'recorder:element-picked', 'recorder:region-selected', 'recorder:filter-recorded', 'recorder:macro-recorded', 'recorder:cancelled',
       'flow:progress',
       'app:update-checking', 'app:update-available', 'app:update-not-available',
       'app:update-download-progress', 'app:update-downloaded', 'app:update-download-complete',

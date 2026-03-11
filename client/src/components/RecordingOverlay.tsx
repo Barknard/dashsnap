@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MousePointer2, Camera, Scissors, Hand, ListFilter, Type, ArrowDownUp, Search, Filter, X } from 'lucide-react';
+import { MousePointer2, Camera, Scissors, Hand, ListFilter, Type, ArrowDownUp, Search, Filter, Clapperboard, X } from 'lucide-react';
 import { Button } from './ui/Button';
 import { useAppStore } from '@/stores/appStore';
 import { recorder } from '@/lib/ipc';
 
 interface RecordingOverlayProps {
-  type: 'click' | 'snap' | 'screenshot' | 'hover' | 'select' | 'type' | 'scroll-element' | 'search-select' | 'filter' | null;
+  type: 'click' | 'snap' | 'screenshot' | 'hover' | 'select' | 'type' | 'scroll-element' | 'search-select' | 'filter' | 'macro' | null;
 }
 
 export function RecordingOverlay({ type }: RecordingOverlayProps) {
@@ -26,12 +26,12 @@ export function RecordingOverlay({ type }: RecordingOverlayProps) {
   const iconMap: Record<string, typeof MousePointer2> = {
     click: MousePointer2, snap: Camera, screenshot: Scissors,
     hover: Hand, select: ListFilter, type: Type, 'scroll-element': ArrowDownUp,
-    'search-select': Search, filter: Filter,
+    'search-select': Search, filter: Filter, macro: Clapperboard,
   };
   const colorMap: Record<string, string> = {
     click: 'ds-accent', snap: 'ds-emerald', screenshot: 'ds-cyan',
     hover: 'ds-purple', select: 'ds-amber', type: 'ds-cyan', 'scroll-element': 'ds-text-muted',
-    'search-select': 'ds-cyan', filter: 'ds-amber',
+    'search-select': 'ds-cyan', filter: 'ds-amber', macro: 'ds-accent',
   };
   const messageMap: Record<string, string> = {
     click: 'Click any element in the browser',
@@ -43,6 +43,7 @@ export function RecordingOverlay({ type }: RecordingOverlayProps) {
     'scroll-element': 'Select a scrollable element',
     'search-select': 'Select the search input field',
     filter: 'Guided filter recording — follow steps in browser',
+    macro: 'Recording macro — click, scroll, interact freely. Enter to finish.',
   };
   const Icon = iconMap[type || 'click'];
   const color = colorMap[type || 'click'];

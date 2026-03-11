@@ -374,8 +374,8 @@ const FILTER_OVERLAY_JS = `
 
   const phases = {
     trigger: '<span style="color:#F59E0B;font-weight:700">Step 1/3</span> — Click the filter to <b>open</b> it',
-    options: '<span style="color:#F59E0B;font-weight:700">Step 2/3</span> — Click options to select · <kbd style="background:#333;padding:2px 6px;border-radius:3px;font-size:11px">Enter</kbd> when done',
-    apply:   '<span style="color:#F59E0B;font-weight:700">Step 3/3</span> — Click <b>apply</b> button · <kbd style="background:#333;padding:2px 6px;border-radius:3px;font-size:11px">Enter</kbd> to re-click trigger instead',
+    options: '<span style="color:#F59E0B;font-weight:700">Step 2/3</span> — Click options to select · <kbd data-advance="true" style="background:#333;padding:2px 6px;border-radius:3px;font-size:11px;cursor:pointer;user-select:none">Enter</kbd> when done',
+    apply:   '<span style="color:#F59E0B;font-weight:700">Step 3/3</span> — Click <b>apply</b> button · <kbd data-advance="true" style="background:#333;padding:2px 6px;border-radius:3px;font-size:11px;cursor:pointer;user-select:none">Enter</kbd> to re-click trigger instead',
   };
 
   function updateBanner() {
@@ -400,7 +400,20 @@ const FILTER_OVERLAY_JS = `
   function onClick(e) {
     // DON'T block the event — let clicks go through to the page
     const el = e.target;
-    if (!el || el === banner || el === highlight) return;
+    if (!el || el === highlight) return;
+    // Clicking "Enter" kbd in the banner advances the phase
+    if (el.closest('[data-advance]') || el === banner) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (window.__dashsnap_filter_phase === 'options' && window.__dashsnap_filter_results.options.length > 0) {
+        window.__dashsnap_filter_phase = 'apply';
+        updateBanner();
+      } else if (window.__dashsnap_filter_phase === 'apply') {
+        window.__dashsnap_filter_done = true;
+        cleanup();
+      }
+      return;
+    }
 
     const { selector, strategy } = getBestSelector(el);
     const label = getLabel(el);
@@ -469,6 +482,244 @@ const FILTER_OVERLAY_JS = `
 })();
 `;
 
+// ─── Macro recording overlay ─────────────────────────────────────────────────
+// Free-form interaction recorder: clicks go through, scrolls are captured,
+// each interaction is recorded in sequence with element metadata for
+// variable detection. Banner shows action count and controls.
+const MACRO_OVERLAY_JS = `
+(function() {
+  if (window.__dashsnap_macro_active) return;
+  window.__dashsnap_macro_active = true;
+  window.__dashsnap_macro_done = false;
+  window.__dashsnap_macro_cancelled = false;
+  window.__dashsnap_macro_actions = [];
+
+  const getBestSelector = (function() {
+    return function getBestSelector(el) {
+      for (const attr of el.attributes) {
+        if (attr.name.startsWith('data-') && attr.name !== 'data-reactid') {
+          const sel = el.tagName.toLowerCase() + '[' + attr.name + '="' + attr.value + '"]';
+          if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'data-attr' };
+        }
+      }
+      const ariaLabel = el.getAttribute('aria-label');
+      if (ariaLabel) {
+        const sel = '[aria-label="' + ariaLabel.replace(/"/g, '\\\\\\\\"') + '"]';
+        if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'aria-label' };
+      }
+      if (el.id && document.querySelectorAll('#' + CSS.escape(el.id)).length === 1) {
+        return { selector: '#' + CSS.escape(el.id), strategy: 'id' };
+      }
+      const text = (el.textContent || '').trim();
+      if (text && text.length < 50) {
+        const role = el.getAttribute('role');
+        if (role) {
+          const sel = '[role="' + role + '"]';
+          const matches = [...document.querySelectorAll(sel)].filter(e => (e.textContent||'').trim() === text);
+          if (matches.length === 1) return { selector: sel, strategy: 'text' };
+        }
+      }
+      if (el.className && typeof el.className === 'string') {
+        const classes = el.className.split(/\\s+/).filter(c => c && !c.startsWith('__')).slice(0, 2);
+        if (classes.length > 0) {
+          const sel = el.tagName.toLowerCase() + '.' + classes.join('.');
+          if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'css-combo' };
+        }
+      }
+      return { selector: '', strategy: 'xy-position' };
+    };
+  })();
+
+  function getLabel(el) {
+    const ariaLabel = el.getAttribute('aria-label');
+    if (ariaLabel) return ariaLabel;
+    const text = (el.textContent || '').trim().substring(0, 30);
+    return text || el.tagName.toLowerCase();
+  }
+
+  function getElementMeta(el) {
+    const meta = { tagName: el.tagName.toLowerCase() };
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+      meta.inputType = el.type || 'text';
+      if (el.placeholder) meta.placeholder = el.placeholder;
+    }
+    if (el.tagName === 'SELECT') {
+      meta.options = [...el.options].map(o => o.textContent.trim()).slice(0, 20);
+    }
+    return meta;
+  }
+
+  function isTypeable(el) {
+    const tag = el.tagName;
+    if (tag === 'TEXTAREA') return true;
+    if (tag === 'INPUT') {
+      const t = (el.type || 'text').toLowerCase();
+      return ['text','search','email','tel','url','number','password'].includes(t);
+    }
+    if (el.contentEditable === 'true') return true;
+    return false;
+  }
+
+  // Banner
+  const banner = document.createElement('div');
+  banner.id = '__dashsnap_macro_banner';
+  banner.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:13px system-ui;padding:10px 20px;border-radius:10px;border:2px solid #7C5CFC;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,0.4);display:flex;align-items:center;gap:10px;';
+  document.body.appendChild(banner);
+
+  // Highlight
+  const highlight = document.createElement('div');
+  highlight.id = '__dashsnap_macro_highlight';
+  highlight.style.cssText = 'position:fixed;z-index:2147483646;border:2px solid #7C5CFC;background:rgba(124,92,252,0.12);border-radius:3px;pointer-events:none;display:none;transition:all 0.05s ease;';
+  document.body.appendChild(highlight);
+
+  function flashElement(el) {
+    const flash = document.createElement('div');
+    flash.style.cssText = 'position:fixed;z-index:2147483645;background:rgba(34,211,238,0.3);border:2px solid #22D3EE;border-radius:3px;pointer-events:none;transition:opacity 0.5s;';
+    const rect = el.getBoundingClientRect();
+    flash.style.left = rect.left + 'px';
+    flash.style.top = rect.top + 'px';
+    flash.style.width = rect.width + 'px';
+    flash.style.height = rect.height + 'px';
+    document.body.appendChild(flash);
+    setTimeout(() => { flash.style.opacity = '0'; }, 100);
+    setTimeout(() => flash.remove(), 600);
+  }
+
+  function updateBanner() {
+    const count = window.__dashsnap_macro_actions.length;
+    banner.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;animation:pulse 1s infinite;display:inline-block"></span> '
+      + '<span style="color:#7C5CFC;font-weight:700">MACRO</span> — '
+      + count + ' action' + (count !== 1 ? 's' : '') + ' recorded · '
+      + '<kbd data-macro-done="true" style="background:#333;padding:2px 6px;border-radius:3px;font-size:11px;cursor:pointer;user-select:none">Enter</kbd> to finish';
+  }
+  updateBanner();
+
+  let lastEl = null;
+  function onMouseMove(e) {
+    const el = e.target;
+    if (!el || el === banner || el === highlight || el.closest('#__dashsnap_macro_banner')) return;
+    if (el === lastEl) return;
+    lastEl = el;
+    const rect = el.getBoundingClientRect();
+    highlight.style.display = 'block';
+    highlight.style.left = rect.left + 'px';
+    highlight.style.top = rect.top + 'px';
+    highlight.style.width = rect.width + 'px';
+    highlight.style.height = rect.height + 'px';
+  }
+
+  // Scroll tracking (debounced)
+  let scrollTimer = null;
+  let lastScrollEl = null;
+  let lastScrollX = window.scrollX;
+  let lastScrollY = window.scrollY;
+  function onScroll(e) {
+    clearTimeout(scrollTimer);
+    const target = e.target;
+    scrollTimer = setTimeout(() => {
+      if (target === document || target === window || target === document.documentElement) {
+        // Page scroll
+        const newX = window.scrollX;
+        const newY = window.scrollY;
+        if (newX !== lastScrollX || newY !== lastScrollY) {
+          window.__dashsnap_macro_actions.push({
+            action: 'scroll',
+            label: 'Page scroll to (' + Math.round(newX) + ', ' + Math.round(newY) + ')',
+            scrollTarget: { x: Math.round(newX), y: Math.round(newY), isPage: true },
+          });
+          lastScrollX = newX;
+          lastScrollY = newY;
+          updateBanner();
+        }
+      } else if (target && target.nodeType === 1) {
+        // Element scroll
+        const { selector, strategy } = getBestSelector(target);
+        const rect = target.getBoundingClientRect();
+        window.__dashsnap_macro_actions.push({
+          action: 'scroll',
+          selector: selector,
+          selectorStrategy: strategy,
+          fallbackXY: [Math.round(rect.left + rect.width/2), Math.round(rect.top + rect.height/2)],
+          label: 'Scroll: ' + getLabel(target),
+          scrollTarget: { x: Math.round(target.scrollLeft), y: Math.round(target.scrollTop), isPage: false },
+        });
+        updateBanner();
+      }
+    }, 400);
+  }
+
+  function onClick(e) {
+    const el = e.target;
+    if (!el || el === highlight) return;
+    // "Enter" button in banner or banner click = finish
+    if (el.closest('[data-macro-done]') || el === banner || el.closest('#__dashsnap_macro_banner')) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (window.__dashsnap_macro_actions.length > 0) {
+        window.__dashsnap_macro_done = true;
+        cleanup();
+      }
+      return;
+    }
+
+    // Let click go through to the page
+    const { selector, strategy } = getBestSelector(el);
+    const label = getLabel(el);
+    const rect = el.getBoundingClientRect();
+    const meta = getElementMeta(el);
+    const actionType = isTypeable(el) ? 'type' : (el.tagName === 'SELECT' ? 'select' : 'click');
+
+    window.__dashsnap_macro_actions.push({
+      selector: selector,
+      selectorStrategy: strategy,
+      fallbackXY: [Math.round(rect.left + rect.width/2), Math.round(rect.top + rect.height/2)],
+      label: label,
+      action: actionType,
+      value: '',
+      elementMeta: meta,
+    });
+
+    flashElement(el);
+    updateBanner();
+  }
+
+  function onKeyDown(e) {
+    if (e.key === 'Enter' && (e.target === document.body || e.target === document.documentElement)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (window.__dashsnap_macro_actions.length > 0) {
+        window.__dashsnap_macro_done = true;
+        cleanup();
+      }
+    }
+    if (e.key === 'Escape') {
+      window.__dashsnap_macro_cancelled = true;
+      cleanup();
+    }
+  }
+
+  document.addEventListener('mousemove', onMouseMove, true);
+  document.addEventListener('click', onClick, true);
+  document.addEventListener('keydown', onKeyDown, true);
+  document.addEventListener('scroll', onScroll, true);
+  window.addEventListener('scroll', onScroll, true);
+
+  function cleanup() {
+    clearTimeout(scrollTimer);
+    document.removeEventListener('mousemove', onMouseMove, true);
+    document.removeEventListener('click', onClick, true);
+    document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('scroll', onScroll, true);
+    window.removeEventListener('scroll', onScroll, true);
+    banner.remove();
+    highlight.remove();
+    window.__dashsnap_macro_active = false;
+  }
+
+  window.__dashsnap_macro_cleanup = cleanup;
+})();
+`;
+
 export class Recorder {
   private view: BrowserView;
   private window: BrowserWindow;
@@ -523,6 +774,12 @@ export class Recorder {
     this.pollForFilterResult();
   }
 
+  async startMacroRecording() {
+    this.stopPolling();
+    await this.view.webContents.executeJavaScript(MACRO_OVERLAY_JS);
+    this.pollForMacroResult();
+  }
+
   async startScreenshotRecording() {
     this.stopPolling();
     // Use the region-drawing overlay for freeform screenshot area
@@ -535,10 +792,12 @@ export class Recorder {
     this.view.webContents.executeJavaScript(`
       if (window.__dashsnap_cleanup) { window.__dashsnap_cleanup(); window.__dashsnap_cleanup = null; }
       if (window.__dashsnap_filter_cleanup) { window.__dashsnap_filter_cleanup(); window.__dashsnap_filter_cleanup = null; }
+      if (window.__dashsnap_macro_cleanup) { window.__dashsnap_macro_cleanup(); window.__dashsnap_macro_cleanup = null; }
       document.getElementById('__dashsnap_snap_canvas')?.remove();
       window.__dashsnap_overlay = false;
       window.__dashsnap_snap_overlay = false;
       window.__dashsnap_filter_active = false;
+      window.__dashsnap_macro_active = false;
     `).catch(() => {});
     this.window.webContents.send('recorder:cancelled');
   }
@@ -623,6 +882,39 @@ export class Recorder {
             window.__dashsnap_filter_results = null;
           `);
           this.window.webContents.send('recorder:filter-recorded', results);
+        }
+      } catch {
+        // Page may have navigated
+      }
+    }, 100);
+  }
+
+  private pollForMacroResult() {
+    this.pollInterval = setInterval(async () => {
+      try {
+        const cancelled = await this.view.webContents.executeJavaScript(
+          'window.__dashsnap_macro_cancelled || false'
+        );
+        if (cancelled) {
+          this.stopPolling();
+          await this.view.webContents.executeJavaScript('window.__dashsnap_macro_cancelled = false;');
+          this.window.webContents.send('recorder:cancelled');
+          return;
+        }
+
+        const done = await this.view.webContents.executeJavaScript(
+          'window.__dashsnap_macro_done || false'
+        );
+        if (done) {
+          this.stopPolling();
+          const actions = await this.view.webContents.executeJavaScript(
+            'JSON.parse(JSON.stringify(window.__dashsnap_macro_actions))'
+          );
+          await this.view.webContents.executeJavaScript(`
+            window.__dashsnap_macro_done = false;
+            window.__dashsnap_macro_actions = [];
+          `);
+          this.window.webContents.send('recorder:macro-recorded', actions);
         }
       } catch {
         // Page may have navigated

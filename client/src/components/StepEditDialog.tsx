@@ -3,13 +3,14 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as Slider from '@radix-ui/react-slider';
 import {
   MousePointer, Clock, Camera, Globe, ArrowDown, X, Copy, AlertTriangle,
-  Hand, ListFilter, Type, ArrowDownUp, Search, Filter,
+  Hand, ListFilter, Type, ArrowDownUp, Search, Filter, Clapperboard,
+  Trash2, Plus, ChevronUp, ChevronDown,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { Badge, stepTypeBadgeVariant } from './ui/Badge';
 import { useFlowStore } from '@/stores/flowStore';
-import type { FlowStep } from '@shared/types';
+import type { FlowStep, MacroAction } from '@shared/types';
 import { cn } from '@/lib/utils';
 
 const stepIcons: Record<string, typeof MousePointer> = {
@@ -24,6 +25,7 @@ const stepIcons: Record<string, typeof MousePointer> = {
   SCROLL_ELEMENT: ArrowDownUp,
   SEARCH_SELECT: Search,
   FILTER: Filter,
+  MACRO: Clapperboard,
 };
 
 interface StepEditDialogProps {
@@ -48,6 +50,8 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
   const [searchText, setSearchText] = useState('');
   const [waitForResults, setWaitForResults] = useState(1);
   const [applySelector, setApplySelector] = useState('');
+  const [macroActions, setMacroActions] = useState<MacroAction[]>([]);
+  const [macroWaitBetween, setMacroWaitBetween] = useState(500);
 
   useEffect(() => {
     if (!step) return;
@@ -60,6 +64,7 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
     if (step.type === 'SCROLL_ELEMENT') { setScrollTop(step.scrollTop); setScrollLeft(step.scrollLeft ?? 0); }
     if (step.type === 'SEARCH_SELECT') { setSearchText(step.searchText); setWaitForResults(step.waitForResults ?? 1); setClearFirst(step.clearFirst ?? false); setClickOffAfter(step.clickOffAfter !== false); }
     if (step.type === 'FILTER') { setApplySelector(step.applySelector ?? ''); setClickOffAfter(step.clickOffAfter !== false); }
+    if (step.type === 'MACRO') { setMacroActions([...step.actions]); setMacroWaitBetween(step.waitBetween ?? 500); }
   }, [step]);
 
   if (!step) return null;
@@ -76,6 +81,7 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
     if (step.type === 'SCROLL_ELEMENT') { (updates as Record<string, unknown>).scrollTop = scrollTop; (updates as Record<string, unknown>).scrollLeft = scrollLeft; }
     if (step.type === 'SEARCH_SELECT') { (updates as Record<string, unknown>).searchText = searchText; (updates as Record<string, unknown>).waitForResults = waitForResults; (updates as Record<string, unknown>).clearFirst = clearFirst; (updates as Record<string, unknown>).clickOffAfter = clickOffAfter; }
     if (step.type === 'FILTER') { (updates as Record<string, unknown>).applySelector = applySelector; (updates as Record<string, unknown>).clickOffAfter = clickOffAfter; }
+    if (step.type === 'MACRO') { (updates as Record<string, unknown>).actions = macroActions; (updates as Record<string, unknown>).waitBetween = macroWaitBetween; }
     updateStep(step.id, updates);
     onClose();
   };
@@ -447,6 +453,115 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
                   <input type="checkbox" checked={clickOffAfter} onChange={e => setClickOffAfter(e.target.checked)} className="rounded border-ds-border" />
                   Click off after (apply filter)
                 </label>
+              </>
+            )}
+
+            {/* MACRO specific */}
+            {step.type === 'MACRO' && (
+              <>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-ds-text-muted">
+                      Recorded Actions ({macroActions.length})
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-[10px] text-ds-text-dim">Wait between:</label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="100"
+                        value={macroWaitBetween}
+                        onChange={e => setMacroWaitBetween(parseInt(e.target.value) || 500)}
+                        className="w-16 h-6 text-[10px] text-center"
+                      />
+                      <span className="text-[10px] text-ds-text-dim">ms</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1 max-h-[280px] overflow-y-auto">
+                    {macroActions.map((action, i) => {
+                      const isInput = action.action === 'type' || action.action === 'select';
+                      const actionColors: Record<string, string> = {
+                        click: 'ds-accent', type: 'ds-cyan', select: 'ds-amber', scroll: 'ds-text-dim',
+                      };
+                      const color = actionColors[action.action] || 'ds-text-muted';
+                      return (
+                        <div key={i} className={`rounded-md bg-ds-bg border border-ds-border/50 overflow-hidden ${isInput ? 'border-l-2 border-l-' + color : ''}`}>
+                          <div className="flex items-center gap-2 px-2 py-1.5">
+                            <span className="text-[10px] font-bold text-ds-text-dim w-4 shrink-0">{i + 1}</span>
+                            <span className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded bg-${color}/15 text-${color}`}>
+                              {action.action}
+                            </span>
+                            <span className="text-xs text-ds-text truncate flex-1">
+                              {action.label || action.selector || '(page scroll)'}
+                            </span>
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <button
+                                onClick={() => {
+                                  if (i > 0) {
+                                    const next = [...macroActions];
+                                    [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                                    setMacroActions(next);
+                                  }
+                                }}
+                                disabled={i === 0}
+                                className="p-0.5 hover:text-ds-accent disabled:opacity-30 text-ds-text-dim"
+                              >
+                                <ChevronUp className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (i < macroActions.length - 1) {
+                                    const next = [...macroActions];
+                                    [next[i], next[i + 1]] = [next[i + 1], next[i]];
+                                    setMacroActions(next);
+                                  }
+                                }}
+                                disabled={i === macroActions.length - 1}
+                                className="p-0.5 hover:text-ds-accent disabled:opacity-30 text-ds-text-dim"
+                              >
+                                <ChevronDown className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setMacroActions(macroActions.filter((_, idx) => idx !== i))}
+                                className="p-0.5 hover:text-ds-red text-ds-text-dim"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          {/* Value field for type/select actions */}
+                          {isInput && (
+                            <div className="px-2 pb-1.5">
+                              <Input
+                                value={action.value || ''}
+                                onChange={e => {
+                                  const next = [...macroActions];
+                                  next[i] = { ...next[i], value: e.target.value };
+                                  setMacroActions(next);
+                                }}
+                                placeholder={action.elementMeta?.placeholder || (action.action === 'select' ? 'Option value...' : 'Text or {{variable}}...')}
+                                className="h-6 text-xs font-mono"
+                              />
+                              {action.elementMeta?.placeholder && (
+                                <p className="text-[9px] text-ds-text-dim mt-0.5">
+                                  Placeholder: {action.elementMeta.placeholder}
+                                </p>
+                              )}
+                              {action.elementMeta?.options && action.elementMeta.options.length > 0 && (
+                                <p className="text-[9px] text-ds-text-dim mt-0.5">
+                                  Options: {action.elementMeta.options.slice(0, 5).join(', ')}{action.elementMeta.options.length > 5 ? '...' : ''}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-ds-text-dim">
+                    Use {'{{variableName}}'} in input fields for CSV batch runs. Reorder with arrows, delete with trash.
+                  </p>
+                </div>
               </>
             )}
           </div>

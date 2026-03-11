@@ -18,7 +18,7 @@ import { useFlowStore } from './stores/flowStore';
 import { useAppStore } from './stores/appStore';
 import { recorder, app as appIpc, flow as flowIpc } from './lib/ipc';
 import { generateId } from './lib/utils';
-import type { FlowStep, ClickStep, SnapStep, HoverStep, SelectStep, TypeStep, ScrollElementStep, SearchSelectStep, FilterStep, RunProgress } from '@shared/types';
+import type { FlowStep, ClickStep, SnapStep, HoverStep, SelectStep, TypeStep, ScrollElementStep, SearchSelectStep, FilterStep, MacroStep, MacroAction, RunProgress } from '@shared/types';
 import { toast } from 'sonner';
 
 export default function App() {
@@ -219,6 +219,32 @@ export default function App() {
       setNamePrompt({ open: true, defaultName: step.label, step });
     };
 
+    const handleMacroRecorded = (actions: Array<{ selector?: string; selectorStrategy?: string; fallbackXY?: [number, number]; label?: string; action: string; value?: string; scrollTarget?: { x: number; y: number; isPage: boolean }; elementMeta?: { tagName: string; inputType?: string; placeholder?: string; options?: string[] } }>) => {
+      stopRecording();
+
+      if (!actions || actions.length === 0) {
+        toast.error('Macro recording empty — no actions captured');
+        return;
+      }
+
+      // Auto-detect which actions could use variables
+      const typeActions = actions.filter(a => a.action === 'type' || a.action === 'select');
+      const varHint = typeActions.length > 0
+        ? ` (${typeActions.length} variable-ready)`
+        : '';
+
+      const step: MacroStep = {
+        type: 'MACRO',
+        id: generateId('step'),
+        label: `Macro: ${actions.length} action${actions.length !== 1 ? 's' : ''}${varHint}`,
+        actions: actions as MacroAction[],
+        waitBetween: 500,
+      };
+
+      setNameInput(step.label);
+      setNamePrompt({ open: true, defaultName: step.label, step });
+    };
+
     const handleCancelled = () => {
       stopRecording();
       toast('Recording cancelled');
@@ -227,12 +253,14 @@ export default function App() {
     recorder.onElementPicked(handleElementPicked);
     recorder.onRegionSelected(handleRegionSelected);
     recorder.onFilterRecorded(handleFilterRecorded);
+    recorder.onMacroRecorded(handleMacroRecorded);
     recorder.onCancelled(handleCancelled);
 
     return () => {
       recorder.offElementPicked(handleElementPicked as (...args: unknown[]) => void);
       recorder.offRegionSelected(handleRegionSelected as (...args: unknown[]) => void);
       recorder.offFilterRecorded(handleFilterRecorded as (...args: unknown[]) => void);
+      recorder.offMacroRecorded(handleMacroRecorded as (...args: unknown[]) => void);
     };
   }, [addStep, stopRecording, setActiveTab]);
 

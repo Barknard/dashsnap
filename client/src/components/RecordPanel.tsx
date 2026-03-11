@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  MousePointer2, Camera, Timer, Globe, ArrowDownToLine,
-  Plus, Scissors, Hand, ListFilter, Type, ArrowDownUp,
-  Search, Filter,
+  Camera, Timer, Globe, ArrowDownToLine,
+  Plus, Scissors, Clapperboard,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -33,10 +32,10 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
   const [scrollY, setScrollY] = useState('0');
   const [waitSeconds, setWaitSeconds] = useState(String(defaults.clickWaitSeconds));
 
-  const handleRecordClick = () => {
+  const handleRecordMacro = () => {
     if (!activeFlow) return;
-    startRecording('click');
-    recorder.startClick();
+    startRecording('macro');
+    recorder.startMacro();
   };
 
   const handleRecordSnap = () => {
@@ -49,42 +48,6 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
     if (!activeFlow) return;
     startRecording('screenshot');
     recorder.startScreenshot();
-  };
-
-  const handleRecordHover = () => {
-    if (!activeFlow) return;
-    startRecording('hover');
-    recorder.startHover();
-  };
-
-  const handleRecordSelect = () => {
-    if (!activeFlow) return;
-    startRecording('select');
-    recorder.startSelect();
-  };
-
-  const handleRecordType = () => {
-    if (!activeFlow) return;
-    startRecording('type');
-    recorder.startType();
-  };
-
-  const handleRecordScrollElement = () => {
-    if (!activeFlow) return;
-    startRecording('scroll-element');
-    recorder.startScrollElement();
-  };
-
-  const handleRecordSearchSelect = () => {
-    if (!activeFlow) return;
-    startRecording('search-select');
-    recorder.startSearchSelect();
-  };
-
-  const handleRecordFilter = () => {
-    if (!activeFlow) return;
-    startRecording('filter');
-    recorder.startFilter();
   };
 
   const handleAddWait = () => {
@@ -154,15 +117,9 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
         </h3>
         <div className="grid grid-cols-3 gap-2">
           {([
-            { onClick: handleRecordClick, icon: MousePointer2, label: 'Record Click', desc: 'Click element', color: 'ds-accent' },
+            { onClick: handleRecordMacro, icon: Clapperboard, label: 'Record', desc: 'Click, scroll, type', color: 'ds-accent' },
             { onClick: handleRecordSnap, icon: Camera, label: 'Snap Element', desc: 'Pick element', color: 'ds-emerald' },
             { onClick: handleRecordScreenshot, icon: Scissors, label: 'Screenshot', desc: 'Draw region', color: 'ds-cyan' },
-            { onClick: handleRecordHover, icon: Hand, label: 'Hover', desc: 'Hover element', color: 'ds-purple' },
-            { onClick: handleRecordSelect, icon: ListFilter, label: 'Select Option', desc: 'Pick dropdown', color: 'ds-amber' },
-            { onClick: handleRecordType, icon: Type, label: 'Type Text', desc: 'Input field', color: 'ds-cyan' },
-            { onClick: handleRecordScrollElement, icon: ArrowDownUp, label: 'Scroll In', desc: 'Scroll element', color: 'ds-text-muted' },
-            { onClick: handleRecordSearchSelect, icon: Search, label: 'Search & Select', desc: 'Type + pick result', color: 'ds-cyan' },
-            { onClick: handleRecordFilter, icon: Filter, label: 'Filter', desc: 'Toggle filter', color: 'ds-amber' },
           ] as const).map(({ onClick, icon: BtnIcon, label, desc, color }) => (
             <motion.div key={label} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <button

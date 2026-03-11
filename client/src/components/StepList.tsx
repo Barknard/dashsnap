@@ -5,7 +5,7 @@ import {
   MousePointer, Clock, Camera, Globe, ArrowDown,
   GripVertical, Pencil, X, ChevronUp, ChevronDown,
   Layout, Maximize2, SlidersHorizontal,
-  Hand, ListFilter, Type, ArrowDownUp, Search, Filter,
+  Hand, ListFilter, Type, ArrowDownUp, Search, Filter, Clapperboard,
 } from 'lucide-react';
 import { type FlowStep, type PptxLayout, type RunStepStatus, type SnapStep } from '@shared/types';
 import { Badge, stepTypeBadgeVariant } from './ui/Badge';
@@ -30,6 +30,7 @@ const stepIcons: Record<string, typeof MousePointer> = {
   SCROLL_ELEMENT: ArrowDownUp,
   SEARCH_SELECT: Search,
   FILTER: Filter,
+  MACRO: Clapperboard,
 };
 
 function stepDetail(step: FlowStep): string {
@@ -48,6 +49,17 @@ function stepDetail(step: FlowStep): string {
     case 'SCROLL_ELEMENT': return `scrollTop: ${step.scrollTop}`;
     case 'SEARCH_SELECT': return `"${truncate(step.searchText, 30)}"`;
     case 'FILTER': return `${step.optionSelectors?.length || 0} option(s)${step.applySelector ? ' + apply' : ' → re-click trigger'}`;
+    case 'MACRO': {
+      const types = step.actions.map(a => a.action);
+      const clicks = types.filter(t => t === 'click').length;
+      const typed = types.filter(t => t === 'type').length;
+      const scrolls = types.filter(t => t === 'scroll').length;
+      const parts = [];
+      if (clicks) parts.push(`${clicks} click${clicks > 1 ? 's' : ''}`);
+      if (typed) parts.push(`${typed} input${typed > 1 ? 's' : ''}`);
+      if (scrolls) parts.push(`${scrolls} scroll${scrolls > 1 ? 's' : ''}`);
+      return `${step.actions.length} actions (${parts.join(', ') || 'empty'})`;
+    }
     default: return '';
   }
 }

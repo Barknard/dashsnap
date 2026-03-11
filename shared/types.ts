@@ -1,6 +1,6 @@
 // ─── Step Types ───────────────────────────────────────────────────────────────
 
-export type StepType = 'CLICK' | 'WAIT' | 'SNAP' | 'NAVIGATE' | 'SCROLL' | 'HOVER' | 'SELECT' | 'TYPE' | 'SCROLL_ELEMENT' | 'SEARCH_SELECT' | 'FILTER';
+export type StepType = 'CLICK' | 'WAIT' | 'SNAP' | 'NAVIGATE' | 'SCROLL' | 'HOVER' | 'SELECT' | 'TYPE' | 'SCROLL_ELEMENT' | 'SEARCH_SELECT' | 'FILTER' | 'MACRO';
 
 export interface ClickStep {
   type: 'CLICK';
@@ -117,12 +117,40 @@ export interface FilterStep {
   clickOffAfter?: boolean;
 }
 
+export interface MacroAction {
+  selector?: string;
+  fallbackXY?: [number, number];
+  selectorStrategy?: string;
+  label?: string;
+  action: 'click' | 'type' | 'select' | 'scroll';
+  value?: string;            // for type/select — supports {{variable}}
+  scrollTarget?: {           // for scroll actions
+    x: number;
+    y: number;
+    isPage: boolean;         // true = window scroll, false = element scroll
+  };
+  elementMeta?: {
+    tagName: string;
+    inputType?: string;      // e.g. 'text', 'search', 'email'
+    placeholder?: string;
+    options?: string[];      // for <select> elements
+  };
+}
+
+export interface MacroStep {
+  type: 'MACRO';
+  id: string;
+  label: string;
+  actions: MacroAction[];
+  waitBetween?: number;      // ms between actions, default 500
+}
+
 export interface FlowVariable {
   name: string;
   defaultValue: string;
 }
 
-export type FlowStep = ClickStep | WaitStep | SnapStep | NavigateStep | ScrollStep | HoverStep | SelectStep | TypeStep | ScrollElementStep | SearchSelectStep | FilterStep;
+export type FlowStep = ClickStep | WaitStep | SnapStep | NavigateStep | ScrollStep | HoverStep | SelectStep | TypeStep | ScrollElementStep | SearchSelectStep | FilterStep | MacroStep;
 
 // ─── Flow ─────────────────────────────────────────────────────────────────────
 
