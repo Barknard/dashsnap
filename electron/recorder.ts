@@ -644,8 +644,10 @@ const MACRO_OVERLAY_JS = `
 
   let lastEl = null;
   function onMouseMove(e) {
-    const el = e.target;
-    if (!el || el === banner || el === highlight || el === tooltip || el.closest('#__dashsnap_macro_banner')) return;
+    var rawEl = e.target;
+    if (!rawEl || rawEl === banner || rawEl === highlight || rawEl === tooltip || rawEl.closest('#__dashsnap_macro_banner')) return;
+    // Show the interactive ancestor, not the inner div/span
+    const el = findInteractiveAncestor(rawEl);
     if (el === lastEl) return;
     lastEl = el;
     const rect = el.getBoundingClientRect();
@@ -794,15 +796,40 @@ const MACRO_OVERLAY_JS = `
     });
   }
 
+  // Walk up from the clicked element to find the nearest meaningful/interactive element
+  function findInteractiveAncestor(el) {
+    var current = el;
+    var interactiveTags = ['A', 'BUTTON', 'INPUT', 'TEXTAREA', 'SELECT', 'LABEL'];
+    // Walk up max 5 levels to find an interactive ancestor
+    for (var i = 0; i < 5 && current && current !== document.body; i++) {
+      if (interactiveTags.includes(current.tagName)) return current;
+      if (current.getAttribute('role') === 'button' || current.getAttribute('role') === 'link' ||
+          current.getAttribute('role') === 'tab' || current.getAttribute('role') === 'menuitem') return current;
+      if (current.onclick || current.getAttribute('tabindex')) return current;
+      current = current.parentElement;
+    }
+    // No interactive ancestor found — check if original element has a good selector
+    var { selector } = getBestSelector(el);
+    if (selector) return el;
+    // Try parents for better selectors
+    current = el.parentElement;
+    for (var i = 0; i < 3 && current && current !== document.body; i++) {
+      var { selector } = getBestSelector(current);
+      if (selector) return current;
+      current = current.parentElement;
+    }
+    return el; // give up, use original
+  }
+
   function onClick(e) {
-    const el = e.target;
-    if (!el || el === highlight) return;
+    var rawEl = e.target;
+    if (!rawEl || rawEl === highlight) return;
     // Ignore clicks while text prompt is open
     if (promptOverlay) return;
     // Ignore clicks while automated typing is in progress
     if (window.__dashsnap_macro_typing) return;
     // Done button or banner click = finish recording
-    if (el.id === '__ds_done_btn' || el === banner || el.closest('#__dashsnap_macro_banner')) {
+    if (rawEl.id === '__ds_done_btn' || rawEl === banner || rawEl.closest('#__dashsnap_macro_banner')) {
       e.preventDefault();
       e.stopImmediatePropagation();
       if (window.__dashsnap_macro_actions.length > 0) {
@@ -816,6 +843,8 @@ const MACRO_OVERLAY_JS = `
       return;
     }
 
+    // Walk up to find the real interactive element (not a generic div/span wrapper)
+    const el = findInteractiveAncestor(rawEl);
     // Let click go through to the page
     const { selector, strategy } = getBestSelector(el);
     const label = getLabel(el);
