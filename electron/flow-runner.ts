@@ -311,17 +311,22 @@ export class FlowRunner {
   ): Promise<'success' | 'warning'> {
     const wc = this.view.webContents;
 
-    // Try selector first
+    // Try selector first — dispatch real mouse events at the element's center
     if (step.selector) {
-      const found = await wc.executeJavaScript(`
+      const coords = await wc.executeJavaScript(`
         (function() {
           const el = document.querySelector(${JSON.stringify(step.selector)});
-          if (el) { el.click(); return true; }
-          return false;
+          if (!el) return null;
+          const rect = el.getBoundingClientRect();
+          if (rect.width === 0 && rect.height === 0) return null;
+          return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
         })()
-      `).catch(() => false);
+      `).catch(() => null);
 
-      if (found) {
+      if (coords) {
+        const { x, y } = coords;
+        wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+        wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
         await this.delay(waitSeconds * 1000);
         return 'success';
       }
@@ -373,22 +378,19 @@ export class FlowRunner {
     const wc = this.view.webContents;
 
     if (step.selector) {
-      const found = await wc.executeJavaScript(`
+      const coords = await wc.executeJavaScript(`
         (function() {
           const el = document.querySelector(${JSON.stringify(step.selector)});
-          if (el) {
-            const rect = el.getBoundingClientRect();
-            const evt = new MouseEvent('mouseover', { bubbles: true, clientX: rect.left + rect.width/2, clientY: rect.top + rect.height/2 });
-            el.dispatchEvent(evt);
-            const evt2 = new MouseEvent('mouseenter', { bubbles: false, clientX: rect.left + rect.width/2, clientY: rect.top + rect.height/2 });
-            el.dispatchEvent(evt2);
-            return true;
-          }
-          return false;
+          if (!el) return null;
+          const rect = el.getBoundingClientRect();
+          if (rect.width === 0 && rect.height === 0) return null;
+          return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
         })()
-      `).catch(() => false);
+      `).catch(() => null);
 
-      if (found) {
+      if (coords) {
+        const { x, y } = coords;
+        wc.sendInputEvent({ type: 'mouseMove', x, y });
         await this.delay(waitSeconds * 1000);
         return 'success';
       }
@@ -411,23 +413,27 @@ export class FlowRunner {
     const wc = this.view.webContents;
 
     if (step.selector) {
-      const found = await wc.executeJavaScript(`
+      const result = await wc.executeJavaScript(`
         (function() {
           const el = document.querySelector(${JSON.stringify(step.selector)});
-          if (el && el.tagName === 'SELECT') {
+          if (!el) return null;
+          const rect = el.getBoundingClientRect();
+          if (el.tagName === 'SELECT') {
             el.value = ${JSON.stringify(step.optionValue)};
             el.dispatchEvent(new Event('change', { bubbles: true }));
-            return true;
+            return { isSelect: true };
           }
-          if (el) {
-            el.click();
-            return true;
-          }
-          return false;
+          if (rect.width === 0 && rect.height === 0) return null;
+          return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
         })()
-      `).catch(() => false);
+      `).catch(() => null);
 
-      if (found) {
+      if (result) {
+        if (!result.isSelect) {
+          const { x, y } = result;
+          wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+          wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+        }
         await this.delay(waitSeconds * 1000);
         if (step.clickOffAfter !== false) {
           await this.clickOff(wc);
@@ -457,19 +463,23 @@ export class FlowRunner {
     const wc = this.view.webContents;
 
     if (step.selector) {
-      const found = await wc.executeJavaScript(`
+      const coords = await wc.executeJavaScript(`
         (function() {
           const el = document.querySelector(${JSON.stringify(step.selector)});
-          if (el) {
-            el.focus();
-            ${step.clearFirst ? "el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true }));" : ''}
-            return true;
-          }
-          return false;
+          if (!el) return null;
+          const rect = el.getBoundingClientRect();
+          if (rect.width === 0 && rect.height === 0) return null;
+          ${step.clearFirst ? "el.focus(); el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true }));" : ''}
+          return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
         })()
-      `).catch(() => false);
+      `).catch(() => null);
 
-      if (found) {
+      if (coords) {
+        const { x, y } = coords;
+        // Click to focus the element via real mouse event
+        wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+        wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+        await this.delay(100);
         const typeText = this.substituteVariables(step.text);
         for (const char of typeText) {
           wc.sendInputEvent({ type: 'char', keyCode: char });
@@ -779,14 +789,21 @@ export class FlowRunner {
     fallbackXY?: [number, number],
   ): Promise<'ok' | 'fallback' | false> {
     if (selector) {
-      const found = await wc.executeJavaScript(`
+      const coords = await wc.executeJavaScript(`
         (function() {
           const el = document.querySelector(${JSON.stringify(selector)});
-          if (el) { el.click(); return true; }
-          return false;
+          if (!el) return null;
+          const rect = el.getBoundingClientRect();
+          if (rect.width === 0 && rect.height === 0) return null;
+          return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
         })()
-      `).catch(() => false);
-      if (found) return 'ok';
+      `).catch(() => null);
+      if (coords) {
+        const { x, y } = coords;
+        wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+        wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+        return 'ok';
+      }
     }
     if (fallbackXY) {
       const [x, y] = fallbackXY;

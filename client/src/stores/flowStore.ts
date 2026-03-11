@@ -26,6 +26,7 @@ interface FlowStore {
   // Step operations
   addStep: (step: FlowStep) => void;
   removeStep: (stepId: string) => void;
+  removeGroup: (groupId: string) => void;
   updateStep: (stepId: string, updates: Partial<FlowStep>) => void;
   moveStepUp: (stepId: string) => void;
   moveStepDown: (stepId: string) => void;
@@ -174,6 +175,20 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
       flows: state.flows.map(f =>
         f.id === activeFlowId
           ? { ...f, steps: f.steps.filter(s => s.id !== stepId), updatedAt: new Date().toISOString() }
+          : f
+      ),
+      selectedStepIndex: null,
+    }));
+    get().saveFlows();
+  },
+
+  removeGroup: (groupId: string) => {
+    const { activeFlowId } = get();
+    if (!activeFlowId) return;
+    set(state => ({
+      flows: state.flows.map(f =>
+        f.id === activeFlowId
+          ? { ...f, steps: f.steps.filter(s => s.group !== groupId), updatedAt: new Date().toISOString() }
           : f
       ),
       selectedStepIndex: null,

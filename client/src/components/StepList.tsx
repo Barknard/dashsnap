@@ -1,10 +1,11 @@
 import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Switch from '@radix-ui/react-switch';
+import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import {
   MousePointer, Clock, Camera, Globe, ArrowDown,
-  GripVertical, Pencil, X, ChevronUp, ChevronDown,
-  Layout, Maximize2, SlidersHorizontal,
+  GripVertical, Pencil, X, ChevronUp, ChevronDown, ChevronRight,
+  Layout, Maximize2, SlidersHorizontal, Trash2,
   Hand, ListFilter, Type, ArrowDownUp, Search, Filter, Clapperboard,
 } from 'lucide-react';
 import { type FlowStep, type PptxLayout, type RunStepStatus, type SnapStep } from '@shared/types';
@@ -86,6 +87,7 @@ export function StepList({ onEditStep }: StepListProps) {
   const selectedStepIndex = useFlowStore(s => s.selectedStepIndex);
   const selectStep = useFlowStore(s => s.selectStep);
   const removeStep = useFlowStore(s => s.removeStep);
+  const removeGroup = useFlowStore(s => s.removeGroup);
   const moveStepUp = useFlowStore(s => s.moveStepUp);
   const moveStepDown = useFlowStore(s => s.moveStepDown);
   const updateStep = useFlowStore(s => s.updateStep);
@@ -94,6 +96,17 @@ export function StepList({ onEditStep }: StepListProps) {
   const setActiveTab = useAppStore(s => s.setActiveTab);
   const globalLayout = useAppStore(s => s.settings.pptxLayout);
   const [expandedSnapId, setExpandedSnapId] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
+
+  const toggleGroupCollapse = useCallback((groupId: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  }, []);
 
   // Drag-and-drop state
   const dragIndexRef = useRef<number | null>(null);
@@ -205,6 +218,11 @@ export function StepList({ onEditStep }: StepListProps) {
           const isGroupStart = !!group && group !== prevGroup;
           const isInGroup = !!group;
           const isGroupEnd = !!group && group !== nextGroup;
+          const isCollapsed = !!group && collapsedGroups.has(group);
+          const groupStepCount = isGroupStart && group ? flow.steps.filter(s => s.group === group).length : 0;
+
+          // Skip rendering non-first steps in collapsed groups
+          if (isInGroup && !isGroupStart && isCollapsed) return null;
 
           const isSnap = step.type === 'SNAP';
           const isExpanded = isSnap && expandedSnapId === step.id;
@@ -237,11 +255,31 @@ export function StepList({ onEditStep }: StepListProps) {
           return (
             <div key={step.id}>
               {/* Group header */}
-              {isGroupStart && (
-                <div className="flex items-center gap-1.5 px-2 py-1 mb-1">
-                  <Clapperboard className="w-3 h-3 text-ds-accent" />
-                  <span className="text-[10px] font-bold text-ds-accent uppercase tracking-wider">Recording Session</span>
+              {isGroupStart && group && (
+                <div className="flex items-center gap-1.5 px-2 py-1 mb-1 group/grp">
+                  <button
+                    onClick={() => toggleGroupCollapse(group)}
+                    className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+                  >
+                    {isCollapsed
+                      ? <ChevronRight className="w-3 h-3 text-ds-accent" />
+                      : <ChevronDown className="w-3 h-3 text-ds-accent" />
+                    }
+                    <Clapperboard className="w-3 h-3 text-ds-accent" />
+                    <span className="text-[10px] font-bold text-ds-accent uppercase tracking-wider">
+                      Recording Session
+                      {isCollapsed && <span className="text-ds-text-dim font-normal ml-1">({groupStepCount} steps)</span>}
+                    </span>
+                  </button>
                   <div className="flex-1 h-px bg-ds-accent/20" />
+                  <Tooltip content="Delete all steps in this session">
+                    <button
+                      onClick={() => setDeleteGroupId(group)}
+                      className="opacity-0 group-hover/grp:opacity-100 transition-opacity p-0.5 rounded hover:bg-ds-red/10 hover:text-ds-red text-ds-text-dim"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </Tooltip>
                 </div>
               )}
               <motion.div
@@ -498,6 +536,43 @@ export function StepList({ onEditStep }: StepListProps) {
           );
         })}
       </AnimatePresence>
+
+      {/* Delete group confirmation dialog */}
+      <AlertDialog.Root open={!!deleteGroupId} onOpenChange={open => { if (!open) setDeleteGroupId(null); }}>
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="fixed top-0 left-0 bottom-0 w-[var(--sidebar-w,380px)] bg-black/60 z-50" />
+          <AlertDialog.Content className="fixed top-1/2 left-[calc(var(--sidebar-w,380px)/2)] -translate-x-1/2 -translate-y-1/2 w-[320px] bg-ds-surface border border-ds-border rounded-xl p-5 z-50 shadow-2xl">
+            <AlertDialog.Title className="text-sm font-bold text-ds-text">
+              Delete Recording Session?
+            </AlertDialog.Title>
+            <AlertDialog.Description className="text-xs text-ds-text-dim mt-2 mb-4">
+              This will remove all {deleteGroupId ? flow?.steps.filter(s => s.group === deleteGroupId).length : 0} steps
+              in this recording session. This cannot be undone.
+            </AlertDialog.Description>
+            <div className="flex justify-end gap-2">
+              <AlertDialog.Cancel asChild>
+                <Button variant="ghost" size="sm">Cancel</Button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <Button
+                  size="sm"
+                  className="bg-ds-red hover:bg-ds-red/80 text-white"
+                  onClick={() => {
+                    if (deleteGroupId) {
+                      removeGroup(deleteGroupId);
+                      collapsedGroups.delete(deleteGroupId);
+                      setCollapsedGroups(new Set(collapsedGroups));
+                    }
+                    setDeleteGroupId(null);
+                  }}
+                >
+                  Delete All
+                </Button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
     </div>
   );
 }
