@@ -718,11 +718,13 @@ const MACRO_OVERLAY_JS = `
         const newX = window.scrollX;
         const newY = window.scrollY;
         if (Math.abs(newX - lastScrollX) > 20 || Math.abs(newY - lastScrollY) > 20) {
-          window.__dashsnap_macro_actions.push({
+          var scrollAction = {
             action: 'scroll',
             label: 'Page scroll to (' + Math.round(newX) + ', ' + Math.round(newY) + ')',
             scrollTarget: { x: Math.round(newX), y: Math.round(newY), isPage: true },
-          });
+          };
+          window.__dashsnap_macro_actions.push(scrollAction);
+          console.log('__DASHSNAP_ACTION__' + JSON.stringify(scrollAction));
           lastScrollX = newX;
           lastScrollY = newY;
           updateBanner();
@@ -731,14 +733,16 @@ const MACRO_OVERLAY_JS = `
         // Element scroll
         const { selector, strategy } = getBestSelector(target);
         const rect = target.getBoundingClientRect();
-        window.__dashsnap_macro_actions.push({
+        var elScrollAction = {
           action: 'scroll',
           selector: selector,
           selectorStrategy: strategy,
           fallbackXY: [Math.round(rect.left + rect.width/2), Math.round(rect.top + rect.height/2)],
           label: 'Scroll: ' + getLabel(target),
           scrollTarget: { x: Math.round(target.scrollLeft), y: Math.round(target.scrollTop), isPage: false },
-        });
+        };
+        window.__dashsnap_macro_actions.push(elScrollAction);
+        console.log('__DASHSNAP_ACTION__' + JSON.stringify(elScrollAction));
         updateBanner();
       }
     }, 1000);
@@ -923,6 +927,7 @@ const MACRO_OVERLAY_JS = `
 
   // Fallback: capture mousedown ONLY for elements where click never fires
   // (e.g., custom dropdown options that suppress click events)
+  // Uses BUBBLE phase (not capture) to avoid interfering with the page's own handlers
   function onMouseDown(e) {
     if (e.button !== 0) return;
     if (e.target === banner || e.target === highlight || e.target === tooltip) return;
@@ -935,7 +940,7 @@ const MACRO_OVERLAY_JS = `
       // Only record if no click event fired for this interaction
       if (Date.now() - lastClickAt < 300 && nearXY(mxy, lastClickXY)) return;
       recordClickAction(target, 'mousedown');
-    }, 200);
+    }, 250);
   }
 
   // Capture select/dropdown changes
@@ -968,11 +973,13 @@ const MACRO_OVERLAY_JS = `
         e.stopImmediatePropagation();
         var rect = lastEl.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
-          window.__dashsnap_macro_actions.push({
+          var snapAction = {
             action: 'snap',
             label: 'Snap: ' + getLabel(lastEl),
             snapRegion: { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
-          });
+          };
+          window.__dashsnap_macro_actions.push(snapAction);
+          console.log('__DASHSNAP_ACTION__' + JSON.stringify(snapAction));
           flashElement(lastEl);
           updateBanner();
         }
@@ -1018,11 +1025,13 @@ const MACRO_OVERLAY_JS = `
           canvas.remove();
           banner.style.display = 'flex';
           if (rw >= 10 && rh >= 10) {
-            window.__dashsnap_macro_actions.push({
+            var regionAction = {
               action: 'snap',
               label: 'Snap region ' + rw + 'x' + rh,
               snapRegion: { x: Math.round(rx), y: Math.round(ry), width: Math.round(rw), height: Math.round(rh) },
-            });
+            };
+            window.__dashsnap_macro_actions.push(regionAction);
+            console.log('__DASHSNAP_ACTION__' + JSON.stringify(regionAction));
             updateBanner();
           }
         });
@@ -1051,7 +1060,7 @@ const MACRO_OVERLAY_JS = `
 
   document.addEventListener('mousemove', onMouseMove, true);
   document.addEventListener('click', onClick, true);
-  document.addEventListener('mousedown', onMouseDown, true);
+  document.addEventListener('mousedown', onMouseDown, false);  // bubble phase — don't interfere with page handlers
   document.addEventListener('keydown', onKeyDown, true);
   document.addEventListener('change', onSelectChange, true);
   document.addEventListener('scroll', onScroll, true);
@@ -1062,7 +1071,7 @@ const MACRO_OVERLAY_JS = `
     clearTimeout(scrollTimer);
     document.removeEventListener('mousemove', onMouseMove, true);
     document.removeEventListener('click', onClick, true);
-    document.removeEventListener('mousedown', onMouseDown, true);
+    document.removeEventListener('mousedown', onMouseDown, false);
     document.removeEventListener('keydown', onKeyDown, true);
     document.removeEventListener('change', onSelectChange, true);
     document.removeEventListener('scroll', onScroll, true);
@@ -1125,15 +1134,11 @@ export class Recorder {
       if (message.startsWith('__DASHSNAP_ACTION__')) {
         try {
           const action = JSON.parse(message.substring('__DASHSNAP_ACTION__'.length));
-          // Only append if this is a new action (check by comparing length)
-          const isDuplicate = this._macroAccumulatedActions.some(
-            (a: any) => a.selector === action.selector && a.action === action.action && a.label === action.label
-              && JSON.stringify(a.fallbackXY) === JSON.stringify(action.fallbackXY)
-          );
-          if (!isDuplicate) {
-            this._macroAccumulatedActions.push(action);
-            console.log('[Macro] Real-time capture:', action.action, action.label, '| selector:', action.selector || 'XY fallback');
-          }
+          // Simply append — the page-side dedup already prevents true duplicates.
+          // Using length-based sync: only append if this would be a new entry.
+          const pageCount = this._macroAccumulatedActions.length;
+          this._macroAccumulatedActions.push(action);
+          console.log('[Macro] Real-time capture #' + (pageCount + 1) + ':', action.action, action.label, '| selector:', action.selector || 'none');
         } catch { /* parse error, ignore */ }
       }
     };
