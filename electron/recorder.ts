@@ -693,12 +693,6 @@ const MACRO_OVERLAY_JS = `
       + '<div style="color:#EEEDF5;font-size:14px;font-weight:600;margin-bottom:4px;">Type text into: <span style="color:#7C5CFC;">' + (actionObj.label || 'input').substring(0, 40) + '</span></div>'
       + '<div style="color:#888;font-size:11px;margin-bottom:12px;">Use <code style="background:#333;padding:1px 4px;border-radius:3px;">{{variable}}</code> for dynamic values</div>'
       + '<input id="__ds_text_input" type="text" placeholder="' + placeholder.replace(/"/g, '&quot;') + '" style="width:100%;box-sizing:border-box;background:#13111C;border:1px solid #444;color:#EEEDF5;font-size:14px;padding:10px 12px;border-radius:8px;outline:none;margin-bottom:12px;" autofocus />'
-      + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">'
-      + '  <label style="color:#EEEDF5;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;">'
-      + '    <input id="__ds_press_enter" type="checkbox" checked style="accent-color:#7C5CFC;width:16px;height:16px;" />'
-      + '    Press Enter after typing'
-      + '  </label>'
-      + '</div>'
       + '<div style="display:flex;gap:8px;justify-content:flex-end;">'
       + '  <button id="__ds_prompt_cancel" style="background:#333;color:#aaa;border:none;padding:8px 16px;border-radius:6px;font:13px system-ui;cursor:pointer;">Skip</button>'
       + '  <button id="__ds_prompt_ok" style="background:#7C5CFC;color:white;border:none;padding:8px 20px;border-radius:6px;font:bold 13px system-ui;cursor:pointer;">Record</button>'
@@ -707,12 +701,10 @@ const MACRO_OVERLAY_JS = `
     document.body.appendChild(promptOverlay);
 
     var input = document.getElementById('__ds_text_input');
-    var enterCheckbox = document.getElementById('__ds_press_enter');
     input.focus();
 
     function finish(confirmed) {
       var textVal = input.value || '';
-      var pressEnter = enterCheckbox.checked;
       promptOverlay.remove();
       promptOverlay = null;
       if (promptStyle.parentNode) promptStyle.remove();
@@ -722,60 +714,23 @@ const MACRO_OVERLAY_JS = `
         actionObj.value = textVal;
         actionObj.label = 'Type: "' + textVal.substring(0, 30) + '"';
         window.__dashsnap_macro_actions.push(actionObj);
-        if (pressEnter) {
-          window.__dashsnap_macro_actions.push({
-            action: 'key',
-            key: 'Enter',
-            selector: actionObj.selector,
-            selectorStrategy: actionObj.selectorStrategy,
-            fallbackXY: actionObj.fallbackXY,
-            label: 'Press Enter',
-          });
-        }
+        // Always record Enter after typing
+        window.__dashsnap_macro_actions.push({
+          action: 'key',
+          key: 'Enter',
+          selector: actionObj.selector,
+          selectorStrategy: actionObj.selectorStrategy,
+          fallbackXY: actionObj.fallbackXY,
+          label: 'Press Enter',
+        });
 
-        // Actually type the text into the page element so the user can continue recording
-        setTimeout(function() {
-          // Re-focus the target element (or find it by selector)
-          var pageEl = targetEl;
-          if (actionObj.selector) {
-            var found = document.querySelector(actionObj.selector);
-            if (found) pageEl = found;
-          }
-          // Also check if activeElement changed (e.g. Google swaps input→textarea)
-          if (document.activeElement && isTypeable(document.activeElement)) {
-            pageEl = document.activeElement;
-          }
-          pageEl.focus();
-          pageEl.click();
-
-          setTimeout(function() {
-            // Check again after focus in case element swapped
-            var actualEl = document.activeElement && isTypeable(document.activeElement) ? document.activeElement : pageEl;
-            // Clear and set value
-            if (actualEl.contentEditable === 'true') {
-              actualEl.textContent = textVal;
-            } else {
-              actualEl.value = '';
-              actualEl.value = textVal;
-            }
-            // Fire input event so the page reacts (autocomplete, validation, etc.)
-            actualEl.dispatchEvent(new Event('input', { bubbles: true }));
-            actualEl.dispatchEvent(new Event('change', { bubbles: true }));
-
-            if (pressEnter) {
-              setTimeout(function() {
-                // Submit via Enter keypress
-                actualEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));
-                actualEl.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-                // Also try form submit as fallback
-                var form = actualEl.closest('form');
-                if (form) {
-                  try { form.requestSubmit(); } catch(e) { form.submit(); }
-                }
-              }, 200);
-            }
-          }, 300);
-        }, 100);
+        // Signal the main process to type text + press Enter using trusted input events
+        // Store the pending action so the polling loop can pick it up
+        window.__dashsnap_macro_pending_type = {
+          selector: actionObj.selector,
+          text: textVal,
+          pressEnter: true,
+        };
 
       } else if (confirmed) {
         actionObj.action = 'click';
@@ -787,29 +742,22 @@ const MACRO_OVERLAY_JS = `
 
     document.getElementById('__ds_prompt_ok').addEventListener('click', function(ev) {
       ev.preventDefault();
-      ev.stopImmediatePropagation();
+      ev.stopPropagation();
       finish(true);
     });
     document.getElementById('__ds_prompt_cancel').addEventListener('click', function(ev) {
       ev.preventDefault();
-      ev.stopImmediatePropagation();
+      ev.stopPropagation();
       finish(false);
     });
+    // Only Escape to dismiss — NO Enter key (avoids loop with page interaction)
     input.addEventListener('keydown', function(ev) {
-      if (ev.key === 'Enter') {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        finish(true);
-      }
+      ev.stopPropagation(); // Prevent overlay's onKeyDown from seeing it
       if (ev.key === 'Escape') {
         ev.preventDefault();
-        ev.stopImmediatePropagation();
         finish(false);
       }
     });
-    // Block all events from reaching the page while prompt is open
-    promptOverlay.addEventListener('click', function(ev) { ev.stopImmediatePropagation(); }, true);
-    promptOverlay.addEventListener('mousedown', function(ev) { ev.stopImmediatePropagation(); }, true);
   }
 
   function onClick(e) {
@@ -1232,13 +1180,20 @@ export class Recorder {
           return;
         }
 
+        // Check for pending type action — the overlay signals us to type text using trusted events
+        const pendingType = await this.view.webContents.executeJavaScript(
+          'window.__dashsnap_macro_pending_type ? JSON.parse(JSON.stringify(window.__dashsnap_macro_pending_type)) : null'
+        );
+        if (pendingType) {
+          await this.view.webContents.executeJavaScript('window.__dashsnap_macro_pending_type = null;');
+          await this.executeTrustedType(pendingType.selector, pendingType.text, pendingType.pressEnter);
+        }
+
         // Continuously sync actions from the page to main process
-        // This ensures actions are preserved even if will-navigate doesn't fire in time
         const currentActions = await this.view.webContents.executeJavaScript(
           'window.__dashsnap_macro_actions ? JSON.parse(JSON.stringify(window.__dashsnap_macro_actions)) : null'
         );
         if (currentActions && currentActions.length > 0) {
-          // Always keep the freshest snapshot of ALL actions (accumulated + current page)
           this._macroAccumulatedActions = currentActions;
           this._lastSyncedCount = currentActions.length;
         }
@@ -1246,6 +1201,51 @@ export class Recorder {
         // Page may have navigated — accumulated actions are safe in main process
       }
     }, 200);
+  }
+
+  /**
+   * Type text into a page element using trusted Electron input events,
+   * then press Enter. Called from the polling loop when the overlay signals
+   * a pending type action.
+   */
+  private async executeTrustedType(selector: string, text: string, pressEnter: boolean) {
+    const wc = this.view.webContents;
+    const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+    // Focus the element
+    if (selector) {
+      await wc.executeJavaScript(`
+        (function() {
+          var el = document.querySelector(${JSON.stringify(selector)});
+          if (el) { el.focus(); el.click(); }
+        })()
+      `).catch(() => {});
+    }
+    await delay(300);
+
+    // Check if element swapped (e.g. Google input→textarea) and re-focus
+    await wc.executeJavaScript(`
+      (function() {
+        var el = document.activeElement;
+        if (!el || el === document.body) {
+          el = document.querySelector(${JSON.stringify(selector)});
+          if (el) { el.focus(); el.click(); }
+        }
+      })()
+    `).catch(() => {});
+    await delay(200);
+
+    // Type each character using trusted sendInputEvent
+    for (const char of text) {
+      wc.sendInputEvent({ type: 'char', keyCode: char });
+      await delay(40);
+    }
+    await delay(300);
+
+    if (pressEnter) {
+      wc.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
+      wc.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
+    }
   }
 
   private stopPolling() {
