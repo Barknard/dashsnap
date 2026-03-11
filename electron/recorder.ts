@@ -502,20 +502,35 @@ const MACRO_OVERLAY_JS = `
   document.documentElement.classList.add('__dashsnap_macro_recording');
 
   const getBestSelector = (function() {
+    // Session-specific data attributes that change every page load — skip these
+    const UNSTABLE_DATA_ATTRS = ['data-ved', 'data-csiid', 'data-ei', 'data-jsarwt', 'data-usg',
+      'data-lpage', 'data-atf', 'data-frt', 'data-ictx', 'data-surl', 'data-docid', 'data-deferred',
+      'data-ri', 'data-tbnid', 'data-cb', 'data-nhd', 'data-lhid', 'data-ctbid'];
     return function getBestSelector(el) {
-      for (const attr of el.attributes) {
-        if (attr.name.startsWith('data-') && attr.name !== 'data-reactid') {
-          const sel = el.tagName.toLowerCase() + '[' + attr.name + '="' + attr.value + '"]';
-          if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'data-attr' };
-        }
-      }
+      // 0. aria-label first — most stable across sessions
       const ariaLabel = el.getAttribute('aria-label');
       if (ariaLabel) {
-        const sel = '[aria-label="' + ariaLabel.replace(/"/g, '\\\\\\\\"') + '"]';
+        const sel = '[aria-label="' + ariaLabel.replace(/"/g, '\\\\"') + '"]';
         if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'aria-label' };
       }
-      if (el.id && document.querySelectorAll('#' + CSS.escape(el.id)).length === 1) {
+      // 1. Stable data attributes (skip session-specific ones)
+      for (const attr of el.attributes) {
+        if (attr.name.startsWith('data-') && attr.name !== 'data-reactid' && !UNSTABLE_DATA_ATTRS.includes(attr.name)) {
+          if (attr.value && attr.value.length < 100) {
+            const sel = el.tagName.toLowerCase() + '[' + attr.name + '="' + attr.value + '"]';
+            if (document.querySelectorAll(sel).length === 1) return { selector: sel, strategy: 'data-attr' };
+          }
+        }
+      }
+      // 2. ID (skip session-generated IDs)
+      if (el.id && !/^[:_]/.test(el.id) && el.id.length < 50 && document.querySelectorAll('#' + CSS.escape(el.id)).length === 1) {
         return { selector: '#' + CSS.escape(el.id), strategy: 'id' };
+      }
+      // 3. name attribute (very stable for form elements like input[name="q"])
+      var nameAttr = el.getAttribute('name');
+      if (nameAttr) {
+        var nameSel = el.tagName.toLowerCase() + '[name="' + nameAttr.replace(/"/g, '\\\\"') + '"]';
+        if (document.querySelectorAll(nameSel).length === 1) return { selector: nameSel, strategy: 'name' };
       }
       const text = (el.textContent || '').trim();
       if (text && text.length < 50) {
@@ -524,6 +539,23 @@ const MACRO_OVERLAY_JS = `
           const sel = '[role="' + role + '"]';
           const matches = [...document.querySelectorAll(sel)].filter(e => (e.textContent||'').trim() === text);
           if (matches.length === 1) return { selector: sel, strategy: 'text' };
+        }
+        // Links/buttons: match by tag + exact text content
+        var tag = el.tagName.toLowerCase();
+        if (tag === 'a' || tag === 'button') {
+          var sameTag = [...document.querySelectorAll(tag)].filter(e => (e.textContent||'').trim() === text);
+          if (sameTag.length === 1) {
+            var safeText = text.replace(/'/g, "\\\\'");
+            return { selector: 'xpath://' + tag + "[normalize-space(.)='" + safeText + "']", strategy: 'text-match' };
+          }
+        }
+      }
+      // Links: match by href attribute
+      if (el.tagName === 'A' && el.getAttribute('href')) {
+        var href = el.getAttribute('href');
+        if (href.length < 200) {
+          var hrefSel = 'a[href="' + href.replace(/"/g, '\\\\"') + '"]';
+          if (document.querySelectorAll(hrefSel).length === 1) return { selector: hrefSel, strategy: 'href' };
         }
       }
       if (el.className && typeof el.className === 'string') {
@@ -808,6 +840,9 @@ const MACRO_OVERLAY_JS = `
     }
 
     window.__dashsnap_macro_actions.push(actionObj);
+    // Immediately log action so main process can capture it via console-message
+    // (prevents loss when click triggers navigation before poll sync)
+    console.log('__DASHSNAP_ACTION__' + JSON.stringify(actionObj));
     flashElement(el);
     updateBanner();
   }
@@ -956,6 +991,8 @@ export class Recorder {
   private window: BrowserWindow;
   private pollInterval: ReturnType<typeof setInterval> | null = null;
   private _macroNavHandler: (() => void) | null = null;
+  private _macroWillNavHandler: ((_e: Electron.Event, url: string) => void) | null = null;
+  private _macroConsoleHandler: ((_e: Electron.Event, level: number, message: string) => void) | null = null;
   private _macroStartUrl: string = '';
   private _macroAccumulatedActions: unknown[] = [];  // Actions preserved across navigations
   private _lastSyncedCount: number = 0;
@@ -1015,6 +1052,28 @@ export class Recorder {
     this._macroAccumulatedActions = [];
     this._lastSyncedCount = 0;
     await this.view.webContents.executeJavaScript(MACRO_OVERLAY_JS);
+
+    // Real-time action capture via console.log — catches actions even if navigation
+    // destroys the page before the poll loop can read them
+    this._macroConsoleHandler = (_e: Electron.Event, _level: number, message: string) => {
+      if (message.startsWith('__DASHSNAP_ACTION__')) {
+        try {
+          const action = JSON.parse(message.substring('__DASHSNAP_ACTION__'.length));
+          // Only append if this is a new action (check by comparing length)
+          const isDuplicate = this._macroAccumulatedActions.some(
+            (a: any) => a.selector === action.selector && a.action === action.action && a.label === action.label
+              && JSON.stringify(a.fallbackXY) === JSON.stringify(action.fallbackXY)
+          );
+          if (!isDuplicate) {
+            this._macroAccumulatedActions.push(action);
+            this._lastSyncedCount = this._macroAccumulatedActions.length;
+            console.log('[Macro] Real-time capture:', action.action, action.label, '| selector:', action.selector || 'XY fallback');
+          }
+        } catch { /* parse error, ignore */ }
+      }
+    };
+    this.view.webContents.on('console-message', this._macroConsoleHandler);
+
     this._macroNavHandler = () => {
       // Re-inject overlay on new page after navigation completes
       setTimeout(() => {
@@ -1192,10 +1251,11 @@ export class Recorder {
         }
 
         // Continuously sync actions from the page to main process
+        // Only update if page has MORE actions than our accumulated copy (avoids losing real-time captured ones)
         const currentActions = await this.view.webContents.executeJavaScript(
           'window.__dashsnap_macro_actions ? JSON.parse(JSON.stringify(window.__dashsnap_macro_actions)) : null'
         );
-        if (currentActions && currentActions.length > 0) {
+        if (currentActions && currentActions.length > this._macroAccumulatedActions.length) {
           this._macroAccumulatedActions = currentActions;
           this._lastSyncedCount = currentActions.length;
         }
@@ -1260,6 +1320,14 @@ export class Recorder {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
+    }
+    if (this._macroConsoleHandler) {
+      this.view.webContents.removeListener('console-message', this._macroConsoleHandler);
+      this._macroConsoleHandler = null;
+    }
+    if (this._macroWillNavHandler) {
+      this.view.webContents.removeListener('will-navigate', this._macroWillNavHandler);
+      this._macroWillNavHandler = null;
     }
     if (this._macroNavHandler) {
       this.view.webContents.removeListener('did-navigate', this._macroNavHandler);

@@ -230,6 +230,7 @@ export class FlowRunner {
   ): Promise<RunStepResult> {
     const result: RunStepResult = { stepId: step.id, status: 'pending' };
     logLines.push(`Step: ${step.type} — ${step.label}`);
+    console.log(`[Playback] ── Step: ${step.type} — ${step.label} (selector: ${(step as any).selector || 'none'}, strategy: ${(step as any).selectorStrategy || 'n/a'})`);
 
     try {
       switch (step.type) {
@@ -304,9 +305,48 @@ export class FlowRunner {
     } catch (err) {
       result.status = 'error';
       result.message = String(err);
+      console.log(`[Playback] ── Step ERROR: ${String(err)}`);
     }
 
+    console.log(`[Playback] ── Step result: ${result.status} (URL: ${this.view.webContents.getURL().substring(0, 80)})`);
     return result;
+  }
+
+  private async findElement(wc: Electron.WebContents, selector: string): Promise<{ x: number; y: number; tag: string; text: string } | null> {
+    // Handle xpath: prefix selectors
+    if (selector.startsWith('xpath:')) {
+      const xpath = selector.substring(6);
+      return wc.executeJavaScript(`
+        (function() {
+          var result = document.evaluate(${JSON.stringify(xpath)}, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+          var el = result.singleNodeValue;
+          if (!el) return null;
+          el.scrollIntoView({ block: 'center', behavior: 'instant' });
+          var r = el.getBoundingClientRect();
+          return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), tag: el.tagName || '', text: (el.textContent || '').trim().substring(0, 40) };
+        })()
+      `).catch(() => null);
+    }
+    // Regular CSS selector
+    return wc.executeJavaScript(`
+      (function() {
+        var el = document.querySelector(${JSON.stringify(selector)});
+        if (!el) return null;
+        el.scrollIntoView({ block: 'center', behavior: 'instant' });
+        var r = el.getBoundingClientRect();
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), tag: el.tagName || '', text: (el.textContent || '').trim().substring(0, 40) };
+      })()
+    `).catch(() => null);
+  }
+
+  private async waitForNavigation(wc: Electron.WebContents, timeoutMs: number = 8000): Promise<void> {
+    await new Promise<void>((resolve) => {
+      let resolved = false;
+      const onStop = () => { if (!resolved) { resolved = true; resolve(); } };
+      wc.once('did-stop-loading', onStop);
+      setTimeout(() => { wc.removeListener('did-stop-loading', onStop); onStop(); }, timeoutMs);
+    });
+    await this.delay(500);
   }
 
   private async executeClick(
@@ -314,28 +354,53 @@ export class FlowRunner {
     waitSeconds: number,
   ): Promise<'success' | 'warning'> {
     const wc = this.view.webContents;
+    const urlBefore = wc.getURL();
 
-    // Try selector first
+    // Try selector with retries — element may not exist yet after page navigation
     if (step.selector) {
-      const found = await wc.executeJavaScript(`
-        (function() {
-          const el = document.querySelector(${JSON.stringify(step.selector)});
-          if (el) { el.click(); return true; }
-          return false;
-        })()
-      `).catch(() => false);
+      for (let attempt = 0; attempt < 5; attempt++) {
+        console.log(`[Playback] Click: finding "${step.selector}" (attempt ${attempt + 1}/5, strategy: ${step.selectorStrategy})`);
+        const rect = await this.findElement(wc, step.selector);
 
-      if (found) {
-        await this.delay(waitSeconds * 1000);
-        return 'success';
+        if (rect) {
+          console.log(`[Playback] Click: found at (${rect.x}, ${rect.y}) — <${rect.tag}> "${rect.text}"`);
+          // Use trusted mouse events so links and navigation actually work
+          wc.sendInputEvent({ type: 'mouseDown', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
+          wc.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
+
+          // Check if click triggered navigation (link click)
+          await this.delay(500);
+          const urlAfter = wc.getURL();
+          if (urlAfter !== urlBefore) {
+            console.log(`[Playback] Click triggered navigation: ${urlAfter.substring(0, 80)}...`);
+            await this.waitForNavigation(wc);
+          }
+
+          await this.delay(waitSeconds * 1000);
+          return 'success';
+        }
+        // Element not found yet — wait and retry (page may still be loading)
+        console.log(`[Playback] Click: selector not found, retrying in 1s...`);
+        await this.delay(1000);
       }
+      console.log(`[Playback] Click: selector "${step.selector}" failed after 5 attempts`);
     }
 
-    // Fallback to XY click
+    // Fallback to stored XY coordinates
     if (step.fallbackXY) {
       const [x, y] = step.fallbackXY;
+      console.log(`[Playback] Click: using fallback XY (${x}, ${y})`);
       wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
       wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+
+      // Check if click triggered navigation
+      await this.delay(500);
+      const urlAfter = wc.getURL();
+      if (urlAfter !== urlBefore) {
+        console.log(`[Playback] Fallback click triggered navigation: ${urlAfter.substring(0, 80)}...`);
+        await this.waitForNavigation(wc);
+      }
+
       await this.delay(waitSeconds * 1000);
       return 'warning';
     }
@@ -363,6 +428,20 @@ export class FlowRunner {
     // Send the keypress
     wc.sendInputEvent({ type: 'keyDown', keyCode: key });
     wc.sendInputEvent({ type: 'keyUp', keyCode: key });
+
+    // If Enter key, wait for any navigation to complete (page load)
+    if (key === 'Enter' || key === 'Return') {
+      await new Promise<void>((resolve) => {
+        let resolved = false;
+        const onStop = () => { if (!resolved) { resolved = true; resolve(); } };
+        wc.once('did-stop-loading', onStop);
+        // Timeout fallback in case no navigation happens
+        setTimeout(() => { wc.removeListener('did-stop-loading', onStop); onStop(); }, 8000);
+      });
+      // Extra settle time for dynamic content
+      await this.delay(1000);
+    }
+
     await this.delay(waitSeconds * 1000);
     return 'success';
   }
@@ -815,17 +894,18 @@ export class FlowRunner {
     fallbackXY?: [number, number],
   ): Promise<'ok' | 'fallback' | false> {
     if (selector) {
-      const found = await wc.executeJavaScript(`
-        (function() {
-          const el = document.querySelector(${JSON.stringify(selector)});
-          if (el) { el.click(); return true; }
-          return false;
-        })()
-      `).catch(() => false);
-      if (found) return 'ok';
+      const rect = await this.findElement(wc, selector);
+      if (rect) {
+        console.log(`[Playback] clickSelector: found "${selector}" at (${rect.x}, ${rect.y})`);
+        wc.sendInputEvent({ type: 'mouseDown', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
+        wc.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
+        return 'ok';
+      }
+      console.log(`[Playback] clickSelector: "${selector}" not found`);
     }
     if (fallbackXY) {
       const [x, y] = fallbackXY;
+      console.log(`[Playback] clickSelector: using fallback XY (${x}, ${y})`);
       wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
       wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
       return 'fallback';
