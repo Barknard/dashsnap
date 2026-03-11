@@ -569,7 +569,7 @@ const MACRO_OVERLAY_JS = `
   // Highlight
   const highlight = document.createElement('div');
   highlight.id = '__dashsnap_macro_highlight';
-  highlight.style.cssText = 'position:fixed;z-index:2147483646;border:2px solid #7C5CFC;background:rgba(124,92,252,0.12);border-radius:3px;pointer-events:none;display:none;transition:all 0.05s ease;';
+  highlight.style.cssText = 'position:fixed;z-index:2147483646;border:3px solid #7C5CFC;background:rgba(124,92,252,0.18);border-radius:4px;pointer-events:none;display:none;transition:all 0.05s ease;box-shadow:0 0 8px rgba(124,92,252,0.4);';
   document.body.appendChild(highlight);
 
   function flashElement(el) {

@@ -150,10 +150,23 @@ export function RunPanel() {
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs text-ds-text-muted">Wait after each step</span>
-            <span className="text-xs font-mono font-bold text-ds-accent">{defaults.stepWaitSeconds}s</span>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min={1}
+                max={60}
+                value={defaults.stepWaitSeconds}
+                onChange={e => {
+                  const v = parseInt(e.target.value, 10);
+                  if (!isNaN(v) && v >= 1 && v <= 60) setStepWait(v);
+                }}
+                className="w-10 h-5 px-1 text-xs font-mono font-bold text-ds-accent text-right bg-ds-bg border border-ds-border rounded focus:outline-none focus:border-ds-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <span className="text-xs text-ds-text-dim">s</span>
+            </div>
           </div>
           <Slider.Root
-            value={[defaults.stepWaitSeconds]}
+            value={[Math.min(defaults.stepWaitSeconds, 20)]}
             onValueChange={([v]) => setStepWait(v)}
             min={1}
             max={20}

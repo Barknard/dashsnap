@@ -11,6 +11,7 @@ export class FlowRunner {
   private running = false;
   private shouldStop = false;
   private currentVariables: Record<string, string> = {};
+  private _delayResolve: (() => void) | null = null;
 
   constructor(view: BrowserView, window: BrowserWindow, config: ConfigManager) {
     this.view = view;
@@ -200,6 +201,24 @@ export class FlowRunner {
 
   stop() {
     this.shouldStop = true;
+
+    // Resolve any pending delay immediately so the run loop exits fast
+    if (this._delayResolve) {
+      this._delayResolve();
+      this._delayResolve = null;
+    }
+
+    // Immediately tell the UI we've stopped
+    this.sendProgress({
+      flowId: '',
+      currentStep: 0,
+      totalSteps: 0,
+      status: 'complete',
+      results: [],
+      completedAt: new Date().toISOString(),
+    });
+
+    this.running = false;
   }
 
   private async executeStep(
@@ -807,7 +826,13 @@ export class FlowRunner {
   }
 
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise(resolve => {
+      this._delayResolve = resolve;
+      setTimeout(() => {
+        this._delayResolve = null;
+        resolve();
+      }, ms);
+    });
   }
 
   private sendProgress(progress: RunProgress) {
