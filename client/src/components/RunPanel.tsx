@@ -5,7 +5,7 @@ import * as Slider from '@radix-ui/react-slider';
 import {
   Play, Square, FlaskConical, FileText, FolderOpen,
   CheckCircle2, AlertTriangle, XCircle, Clock, Sparkles,
-  Presentation,
+  Presentation, Upload, Table2,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
@@ -43,6 +43,7 @@ export function RunPanel() {
   const [outputPath, setOutputPath] = useState<string | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [csvData, setCsvData] = useState<{ headers: string[]; rows: Record<string, string>[]; path: string } | null>(null);
 
   // Listen for progress updates
   useEffect(() => {
@@ -107,6 +108,17 @@ export function RunPanel() {
 
   const handleOpenFolder = () => {
     appIpc.openPath('');
+  };
+
+  const handleBrowseCsv = async () => {
+    const result = await flowIpc.browseCsv();
+    if (result) setCsvData(result);
+  };
+
+  const handleRunBatch = () => {
+    if (!activeFlow || !csvData) return;
+    setOutputPath(null);
+    flowIpc.runBatch(activeFlow.id, csvData.rows);
   };
 
   return (
@@ -218,6 +230,62 @@ export function RunPanel() {
           </Button>
         )}
       </div>
+
+      {/* CSV Batch Run */}
+      <Card className="p-3 space-y-2">
+        <h4 className="text-sm font-semibold text-ds-text-dim uppercase tracking-wider flex items-center gap-1.5">
+          <Table2 className="w-3 h-3 text-ds-cyan" />
+          Batch Run (CSV)
+        </h4>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleBrowseCsv}
+            disabled={noFlow || isRunning}
+          >
+            <Upload className="w-3 h-3 mr-1" />
+            Load CSV
+          </Button>
+          {csvData && (
+            <span className="text-xs text-ds-text-muted truncate flex-1">
+              {csvData.rows.length} rows · {csvData.headers.join(', ')}
+            </span>
+          )}
+        </div>
+        {csvData && (
+          <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
+            <Button
+              variant="success"
+              size="md"
+              className="w-full font-bold"
+              onClick={handleRunBatch}
+              disabled={noFlow || noSteps || isRunning}
+            >
+              <Play className="w-4 h-4 mr-1" />
+              Run Batch ({csvData.rows.length} rows)
+            </Button>
+          </motion.div>
+        )}
+        <p className="text-[10px] text-ds-text-dim">
+          CSV columns map to {'{{variables}}'} in Search & Filter steps.
+        </p>
+      </Card>
+
+      {/* Batch progress indicator */}
+      {runProgress?.batchRow && (
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-ds-cyan/10 border border-ds-cyan/30">
+          <Table2 className="w-3 h-3 text-ds-cyan" />
+          <span className="text-xs font-medium text-ds-cyan">
+            Batch row {runProgress.batchRow}/{runProgress.batchTotal}
+          </span>
+          {runProgress.batchVariables && (
+            <span className="text-xs text-ds-text-dim truncate">
+              {Object.entries(runProgress.batchVariables).map(([k, v]) => `${k}=${v}`).join(', ')}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Progress section */}
       <AnimatePresence>

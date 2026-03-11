@@ -98,6 +98,14 @@ export const recorder = {
     if (!isElectron) { warnNotElectron('recorder:start-scroll-element'); return; }
     window.dashsnap!.send('recorder:start-scroll-element');
   },
+  startSearchSelect: () => {
+    if (!isElectron) { warnNotElectron('recorder:start-search-select'); return; }
+    window.dashsnap!.send('recorder:start-search-select');
+  },
+  startFilter: () => {
+    if (!isElectron) { warnNotElectron('recorder:start-filter'); return; }
+    window.dashsnap!.send('recorder:start-filter');
+  },
   stop: () => {
     if (!isElectron) return;
     window.dashsnap!.send('recorder:stop');
@@ -150,6 +158,14 @@ export const flow = {
   runStep: (flowId: string, stepIndex: number) => {
     if (!isElectron) return;
     window.dashsnap!.send('flow:run-step', flowId, stepIndex);
+  },
+  runBatch: (flowId: string, rows: Record<string, string>[]) => {
+    if (!isElectron) { warnNotElectron('flow:run-batch'); return; }
+    window.dashsnap!.send('flow:run-batch', flowId, rows);
+  },
+  browseCsv: async (): Promise<{ headers: string[]; rows: Record<string, string>[]; path: string } | null> => {
+    if (!isElectron) return null;
+    return (await window.dashsnap!.invoke('flow:browse-csv')) as { headers: string[]; rows: Record<string, string>[]; path: string } | null;
   },
   stop: () => {
     if (!isElectron) return;

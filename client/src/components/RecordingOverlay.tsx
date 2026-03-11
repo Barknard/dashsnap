@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MousePointer2, Camera, Scissors, Hand, ListFilter, Type, ArrowDownUp, X } from 'lucide-react';
+import { MousePointer2, Camera, Scissors, Hand, ListFilter, Type, ArrowDownUp, Search, Filter, X } from 'lucide-react';
 import { Button } from './ui/Button';
 import { useAppStore } from '@/stores/appStore';
 import { recorder } from '@/lib/ipc';
 
 interface RecordingOverlayProps {
-  type: 'click' | 'snap' | 'screenshot' | 'hover' | 'select' | 'type' | 'scroll-element' | null;
+  type: 'click' | 'snap' | 'screenshot' | 'hover' | 'select' | 'type' | 'scroll-element' | 'search-select' | 'filter' | null;
 }
 
 export function RecordingOverlay({ type }: RecordingOverlayProps) {
@@ -26,10 +26,12 @@ export function RecordingOverlay({ type }: RecordingOverlayProps) {
   const iconMap: Record<string, typeof MousePointer2> = {
     click: MousePointer2, snap: Camera, screenshot: Scissors,
     hover: Hand, select: ListFilter, type: Type, 'scroll-element': ArrowDownUp,
+    'search-select': Search, filter: Filter,
   };
   const colorMap: Record<string, string> = {
     click: 'ds-accent', snap: 'ds-emerald', screenshot: 'ds-cyan',
     hover: 'ds-purple', select: 'ds-amber', type: 'ds-cyan', 'scroll-element': 'ds-text-muted',
+    'search-select': 'ds-cyan', filter: 'ds-amber',
   };
   const messageMap: Record<string, string> = {
     click: 'Click any element in the browser',
@@ -39,6 +41,8 @@ export function RecordingOverlay({ type }: RecordingOverlayProps) {
     select: 'Select a dropdown element',
     type: 'Select an input element to type into',
     'scroll-element': 'Select a scrollable element',
+    'search-select': 'Select the search input field',
+    filter: 'Select the filter trigger element',
   };
   const Icon = iconMap[type || 'click'];
   const color = colorMap[type || 'click'];

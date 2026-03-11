@@ -2,7 +2,7 @@ import { BrowserView, BrowserWindow } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import { ConfigManager } from './config-manager';
-import type { Flow, FlowStep, PptxLayout, RunProgress, RunStepResult, SnapStep } from '../shared/types';
+import type { Flow, FlowStep, PptxLayout, RunProgress, RunStepResult, SnapStep, SearchSelectStep, FilterStep } from '../shared/types';
 
 export class FlowRunner {
   private view: BrowserView;
@@ -10,6 +10,7 @@ export class FlowRunner {
   private config: ConfigManager;
   private running = false;
   private shouldStop = false;
+  private currentVariables: Record<string, string> = {};
 
   constructor(view: BrowserView, window: BrowserWindow, config: ConfigManager) {
     this.view = view;
@@ -132,6 +133,71 @@ export class FlowRunner {
     this.sendProgress(progress);
   }
 
+  private substituteVariables(text: string): string {
+    return text.replace(/\{\{(\w+)\}\}/g, (_, name) => {
+      return this.currentVariables[name] ?? `{{${name}}}`;
+    });
+  }
+
+  async runBatch(flowId: string, rows: Record<string, string>[]) {
+    const flowConfig = this.config.loadFlows();
+    const flow = flowConfig.flows.find((f: Flow) => f.id === flowId);
+    if (!flow || this.running) return;
+
+    this.running = true;
+    this.shouldStop = false;
+
+    const settings = this.config.loadSettings();
+    const outputDir = settings.outputPath ||
+      path.join(this.config.getBasePath(), '..', 'output');
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+
+    for (let rowIdx = 0; rowIdx < rows.length; rowIdx++) {
+      if (this.shouldStop) break;
+
+      this.currentVariables = rows[rowIdx];
+
+      const screenshots: Array<{ name: string; path: string; slideLayout?: PptxLayout }> = [];
+      const progress: RunProgress = {
+        flowId,
+        currentStep: 0,
+        totalSteps: flow.steps.length,
+        status: 'running',
+        results: [],
+        startedAt: new Date().toISOString(),
+        batchRow: rowIdx + 1,
+        batchTotal: rows.length,
+        batchVariables: this.currentVariables,
+      };
+      this.sendProgress(progress);
+
+      const logLines: string[] = [];
+      const varSummary = Object.entries(this.currentVariables).map(([k, v]) => `${k}=${v}`).join(', ');
+      logLines.push(`Batch Row ${rowIdx + 1}/${rows.length}: ${varSummary}`);
+
+      for (let i = 0; i < flow.steps.length; i++) {
+        if (this.shouldStop) break;
+
+        progress.currentStep = i;
+        this.sendProgress(progress);
+
+        const step = flow.steps[i];
+        const startTime = Date.now();
+        const result = await this.executeStep(step, flowConfig.defaults, outputDir, screenshots, logLines);
+        result.duration = Date.now() - startTime;
+        progress.results.push(result);
+      }
+
+      // Save screenshots for this row (no PPTX in batch — just screenshots)
+      progress.status = 'complete';
+      progress.completedAt = new Date().toISOString();
+      this.sendProgress(progress);
+    }
+
+    this.currentVariables = {};
+    this.running = false;
+  }
+
   stop() {
     this.shouldStop = true;
   }
@@ -173,7 +239,6 @@ export class FlowRunner {
 
         case 'NAVIGATE':
           await this.view.webContents.loadURL(step.url);
-          await this.waitForLoad(defaults.navigationTimeoutSeconds * 1000);
           result.status = 'success';
           break;
 
@@ -199,6 +264,14 @@ export class FlowRunner {
 
         case 'SCROLL_ELEMENT':
           result.status = await this.executeScrollElement(step);
+          break;
+
+        case 'SEARCH_SELECT':
+          result.status = await this.executeSearchSelect(step, defaults.clickWaitSeconds);
+          break;
+
+        case 'FILTER':
+          result.status = await this.executeFilter(step, defaults.clickWaitSeconds);
           break;
       }
     } catch (err) {
@@ -256,7 +329,11 @@ export class FlowRunner {
         height: step.region.height,
       });
 
-      const filename = `snap_${String(index + 1).padStart(2, '0')}.png`;
+      // Include variable values in filename for batch runs
+      const varSuffix = Object.keys(this.currentVariables).length > 0
+        ? '_' + Object.values(this.currentVariables).join('_').replace(/[^a-zA-Z0-9_-]/g, '')
+        : '';
+      const filename = `snap_${String(index + 1).padStart(2, '0')}${varSuffix}.png`;
       const filePath = path.join(outputDir, filename);
       fs.writeFileSync(filePath, image.toPNG());
       return filePath;
@@ -370,7 +447,8 @@ export class FlowRunner {
       `).catch(() => false);
 
       if (found) {
-        for (const char of step.text) {
+        const typeText = this.substituteVariables(step.text);
+        for (const char of typeText) {
           wc.sendInputEvent({ type: 'char', keyCode: char });
           await this.delay(30);
         }
@@ -387,7 +465,8 @@ export class FlowRunner {
       wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
       wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
       await this.delay(200);
-      for (const char of step.text) {
+      const typeText = this.substituteVariables(step.text);
+      for (const char of typeText) {
         wc.sendInputEvent({ type: 'char', keyCode: char });
         await this.delay(30);
       }
@@ -426,6 +505,182 @@ export class FlowRunner {
     }
 
     throw new Error(`Element not found: ${step.selector}`);
+  }
+
+  private async executeSearchSelect(
+    step: SearchSelectStep,
+    waitSeconds: number,
+  ): Promise<'success' | 'warning'> {
+    const wc = this.view.webContents;
+    const searchText = this.substituteVariables(step.searchText);
+    const waitForResults = (step.waitForResults ?? 1) * 1000;
+
+    // 1. Click and focus the search input
+    if (step.selector) {
+      const found = await wc.executeJavaScript(`
+        (function() {
+          const el = document.querySelector('${step.selector.replace(/'/g, "\\\\'")}');
+          if (el) {
+            el.focus();
+            el.click();
+            ${step.clearFirst ? "el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true }));" : ''}
+            return true;
+          }
+          return false;
+        })()
+      `).catch(() => false);
+
+      if (!found) {
+        if (step.fallbackXY) {
+          const [x, y] = step.fallbackXY;
+          wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+          wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+          await this.delay(200);
+        } else {
+          throw new Error(`Search input not found: ${step.selector}`);
+        }
+      }
+    }
+
+    await this.delay(200);
+
+    // 2. Type the search text
+    for (const char of searchText) {
+      wc.sendInputEvent({ type: 'char', keyCode: char });
+      await this.delay(30);
+    }
+
+    // 3. Wait for results to appear
+    await this.delay(waitForResults);
+
+    // 4. Find and click the matching result by text content
+    const clicked = await wc.executeJavaScript(`
+      (function() {
+        const searchText = '${searchText.replace(/'/g, "\\\\'")}';
+        // Look for visible elements containing the exact text
+        const all = document.querySelectorAll('*');
+        for (const el of all) {
+          if (el.children.length === 0 || el.tagName === 'OPTION' || el.tagName === 'LI' || el.getAttribute('role') === 'option') {
+            const text = (el.textContent || '').trim();
+            if (text === searchText || text.toLowerCase() === searchText.toLowerCase()) {
+              const rect = el.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) {
+                el.click();
+                return true;
+              }
+            }
+          }
+        }
+        // Fallback: partial match
+        for (const el of all) {
+          if (el.children.length === 0 || el.tagName === 'OPTION' || el.tagName === 'LI' || el.getAttribute('role') === 'option') {
+            const text = (el.textContent || '').trim();
+            if (text.toLowerCase().includes(searchText.toLowerCase())) {
+              const rect = el.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0) {
+                el.click();
+                return true;
+              }
+            }
+          }
+        }
+        return false;
+      })()
+    `).catch(() => false);
+
+    await this.delay(waitSeconds * 1000);
+
+    if (step.clickOffAfter !== false) {
+      await this.clickOff(wc);
+    }
+
+    return clicked ? 'success' : 'warning';
+  }
+
+  private async executeFilter(
+    step: FilterStep,
+    waitSeconds: number,
+  ): Promise<'success' | 'warning'> {
+    const wc = this.view.webContents;
+
+    // 1. Click to open the filter
+    if (step.selector) {
+      const found = await wc.executeJavaScript(`
+        (function() {
+          const el = document.querySelector('${step.selector.replace(/'/g, "\\\\'")}');
+          if (el) { el.click(); return true; }
+          return false;
+        })()
+      `).catch(() => false);
+
+      if (!found) {
+        if (step.fallbackXY) {
+          const [x, y] = step.fallbackXY;
+          wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+          wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+        } else {
+          throw new Error(`Filter trigger not found: ${step.selector}`);
+        }
+      }
+    }
+
+    await this.delay(waitSeconds * 1000);
+
+    // 2. Click each option by text content
+    let allFound = true;
+    for (const optionText of (step.optionTexts || [])) {
+      const substituted = this.substituteVariables(optionText);
+      const clicked = await wc.executeJavaScript(`
+        (function() {
+          const target = '${substituted.replace(/'/g, "\\\\'")}';
+          const all = document.querySelectorAll('*');
+          for (const el of all) {
+            if (el.children.length === 0 || el.tagName === 'OPTION' || el.tagName === 'LI' || el.getAttribute('role') === 'option' || el.getAttribute('role') === 'checkbox' || el.tagName === 'LABEL') {
+              const text = (el.textContent || '').trim();
+              if (text === target || text.toLowerCase() === target.toLowerCase()) {
+                const rect = el.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                  el.click();
+                  return true;
+                }
+              }
+            }
+          }
+          return false;
+        })()
+      `).catch(() => false);
+
+      if (!clicked) allFound = false;
+      await this.delay(300);
+    }
+
+    await this.delay(500);
+
+    // 3. Apply — click apply button or re-click trigger
+    if (step.applySelector) {
+      await wc.executeJavaScript(`
+        (function() {
+          const el = document.querySelector('${step.applySelector.replace(/'/g, "\\\\'")}');
+          if (el) el.click();
+        })()
+      `).catch(() => {});
+    } else {
+      // Re-click the trigger to close/apply
+      await wc.executeJavaScript(`
+        (function() {
+          const el = document.querySelector('${step.selector.replace(/'/g, "\\\\'")}');
+          if (el) el.click();
+        })()
+      `).catch(() => {});
+    }
+
+    await this.delay(waitSeconds * 1000);
+
+    if (step.clickOffAfter !== false) {
+      await this.clickOff(wc);
+    }
+
+    return allFound ? 'success' : 'warning';
   }
 
   private async clickOff(wc: Electron.WebContents): Promise<void> {

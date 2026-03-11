@@ -1,6 +1,6 @@
 // ─── Step Types ───────────────────────────────────────────────────────────────
 
-export type StepType = 'CLICK' | 'WAIT' | 'SNAP' | 'NAVIGATE' | 'SCROLL' | 'HOVER' | 'SELECT' | 'TYPE' | 'SCROLL_ELEMENT';
+export type StepType = 'CLICK' | 'WAIT' | 'SNAP' | 'NAVIGATE' | 'SCROLL' | 'HOVER' | 'SELECT' | 'TYPE' | 'SCROLL_ELEMENT' | 'SEARCH_SELECT' | 'FILTER';
 
 export interface ClickStep {
   type: 'CLICK';
@@ -85,7 +85,37 @@ export interface ScrollElementStep {
   scrollLeft?: number;
 }
 
-export type FlowStep = ClickStep | WaitStep | SnapStep | NavigateStep | ScrollStep | HoverStep | SelectStep | TypeStep | ScrollElementStep;
+export interface SearchSelectStep {
+  type: 'SEARCH_SELECT';
+  id: string;
+  label: string;
+  selector: string;        // the search input selector
+  fallbackXY?: [number, number];
+  selectorStrategy: 'data-attr' | 'aria-label' | 'text' | 'css-combo' | 'xy-position';
+  searchText: string;       // text to type (supports {{variable}})
+  waitForResults?: number;  // seconds to wait for dropdown, default 1
+  clearFirst?: boolean;
+  clickOffAfter?: boolean;
+}
+
+export interface FilterStep {
+  type: 'FILTER';
+  id: string;
+  label: string;
+  selector: string;          // the filter trigger selector (opens the filter)
+  fallbackXY?: [number, number];
+  selectorStrategy: 'data-attr' | 'aria-label' | 'text' | 'css-combo' | 'xy-position';
+  optionTexts: string[];     // text labels of options to click
+  applySelector?: string;    // optional apply button; if empty, re-clicks the trigger
+  clickOffAfter?: boolean;
+}
+
+export interface FlowVariable {
+  name: string;
+  defaultValue: string;
+}
+
+export type FlowStep = ClickStep | WaitStep | SnapStep | NavigateStep | ScrollStep | HoverStep | SelectStep | TypeStep | ScrollElementStep | SearchSelectStep | FilterStep;
 
 // ─── Flow ─────────────────────────────────────────────────────────────────────
 
@@ -97,6 +127,7 @@ export interface Flow {
   createdAt: string;
   updatedAt: string;
   steps: FlowStep[];
+  variables?: FlowVariable[];
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
@@ -162,6 +193,9 @@ export interface RunProgress {
   results: RunStepResult[];
   startedAt?: string;
   completedAt?: string;
+  batchRow?: number;
+  batchTotal?: number;
+  batchVariables?: Record<string, string>;
 }
 
 // ─── IPC Channel Types ────────────────────────────────────────────────────────

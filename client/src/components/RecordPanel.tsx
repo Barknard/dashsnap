@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import {
   MousePointer2, Camera, Timer, Globe, ArrowDownToLine,
   Plus, Scissors, Hand, ListFilter, Type, ArrowDownUp,
+  Search, Filter,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -72,6 +73,18 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
     if (!activeFlow) return;
     startRecording('scroll-element');
     recorder.startScrollElement();
+  };
+
+  const handleRecordSearchSelect = () => {
+    if (!activeFlow) return;
+    startRecording('search-select');
+    recorder.startSearchSelect();
+  };
+
+  const handleRecordFilter = () => {
+    if (!activeFlow) return;
+    startRecording('filter');
+    recorder.startFilter();
   };
 
   const handleAddWait = () => {
@@ -148,6 +161,8 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
             { onClick: handleRecordSelect, icon: ListFilter, label: 'Select Option', desc: 'Pick dropdown', color: 'ds-amber' },
             { onClick: handleRecordType, icon: Type, label: 'Type Text', desc: 'Input field', color: 'ds-cyan' },
             { onClick: handleRecordScrollElement, icon: ArrowDownUp, label: 'Scroll In', desc: 'Scroll element', color: 'ds-text-muted' },
+            { onClick: handleRecordSearchSelect, icon: Search, label: 'Search & Select', desc: 'Type + pick result', color: 'ds-cyan' },
+            { onClick: handleRecordFilter, icon: Filter, label: 'Filter', desc: 'Toggle filter', color: 'ds-amber' },
           ] as const).map(({ onClick, icon: BtnIcon, label, desc, color }) => (
             <motion.div key={label} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <button

@@ -283,6 +283,8 @@ function setupIPC() {
   ipcMain.on('recorder:start-select', () => recorder?.startSelectRecording());
   ipcMain.on('recorder:start-type', () => recorder?.startTypeRecording());
   ipcMain.on('recorder:start-scroll-element', () => recorder?.startScrollElementRecording());
+  ipcMain.on('recorder:start-search-select', () => recorder?.startClickRecording());
+  ipcMain.on('recorder:start-filter', () => recorder?.startClickRecording());
   ipcMain.on('recorder:stop', () => recorder?.stop());
 
   // Flow management
@@ -319,7 +321,35 @@ function setupIPC() {
   ipcMain.on('flow:run', (_e, flowId: string) => flowRunner?.run(flowId));
   ipcMain.on('flow:run-step', (_e, flowId: string, stepIndex: number) =>
     flowRunner?.runSingleStep(flowId, stepIndex));
+  ipcMain.on('flow:run-batch', (_e, flowId: string, rows: Record<string, string>[]) =>
+    flowRunner?.runBatch(flowId, rows));
   ipcMain.on('flow:stop', () => flowRunner?.stop());
+
+  // CSV file picker for batch runs
+  ipcMain.handle('flow:browse-csv', async () => {
+    if (!mainWindow) return null;
+    const result = await dialog.showOpenDialog(mainWindow, {
+      filters: [{ name: 'CSV Files', extensions: ['csv'] }],
+      properties: ['openFile'],
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    try {
+      const raw = fs.readFileSync(result.filePaths[0], 'utf-8');
+      // Simple CSV parser: split lines, first line = headers
+      const lines = raw.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) return { headers: [], rows: [] };
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      const rows = lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const row: Record<string, string> = {};
+        headers.forEach((h, idx) => { row[h] = values[idx] || ''; });
+        return row;
+      });
+      return { headers, rows, path: result.filePaths[0] };
+    } catch {
+      return null;
+    }
+  });
 
   // PPTX
   ipcMain.handle('pptx:build', (_e, flowId: string, screenshots: Array<{ name: string; path: string; slideLayout?: import('../shared/types').PptxLayout }>) =>

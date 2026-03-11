@@ -4,7 +4,7 @@ contextBridge.exposeInMainWorld('dashsnap', {
   invoke: (channel: string, ...args: unknown[]) => {
     const allowedInvoke = [
       'browser:get-url',
-      'flow:save', 'flow:load', 'flow:export', 'flow:import',
+      'flow:save', 'flow:load', 'flow:export', 'flow:import', 'flow:browse-csv',
       'pptx:build',
       'settings:load', 'settings:save', 'settings:browse-template', 'settings:browse-folder',
       'app:get-version', 'app:open-path', 'app:open-external', 'app:list-outputs',
@@ -21,8 +21,9 @@ contextBridge.exposeInMainWorld('dashsnap', {
       'browser:highlight-element', 'browser:clear-highlight',
       'recorder:start-click', 'recorder:start-snap', 'recorder:start-screenshot',
       'recorder:start-hover', 'recorder:start-select', 'recorder:start-type', 'recorder:start-scroll-element',
+      'recorder:start-search-select', 'recorder:start-filter',
       'recorder:stop',
-      'flow:run', 'flow:run-step', 'flow:stop',
+      'flow:run', 'flow:run-step', 'flow:run-batch', 'flow:stop',
       'app:check-update', 'app:install-update', 'app:download-update', 'app:apply-update',
       'sidebar:resize',
     ];

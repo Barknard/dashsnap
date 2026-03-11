@@ -18,7 +18,7 @@ import { useFlowStore } from './stores/flowStore';
 import { useAppStore } from './stores/appStore';
 import { recorder, app as appIpc, flow as flowIpc } from './lib/ipc';
 import { generateId } from './lib/utils';
-import type { FlowStep, ClickStep, SnapStep, HoverStep, SelectStep, TypeStep, ScrollElementStep, RunProgress } from '@shared/types';
+import type { FlowStep, ClickStep, SnapStep, HoverStep, SelectStep, TypeStep, ScrollElementStep, SearchSelectStep, FilterStep, RunProgress } from '@shared/types';
 import { toast } from 'sonner';
 
 export default function App() {
@@ -146,6 +146,30 @@ export default function App() {
           fallbackXY: data.xy,
           scrollTop: 0,
         } as ScrollElementStep;
+      } else if (currentRecordingType === 'search-select') {
+        step = {
+          type: 'SEARCH_SELECT',
+          id: generateId('step'),
+          label: `Search: ${data.label || 'input'}`,
+          selector: data.selector,
+          selectorStrategy,
+          fallbackXY: data.xy,
+          searchText: '',
+          waitForResults: 1,
+          clearFirst: true,
+          clickOffAfter: true,
+        } as SearchSelectStep;
+      } else if (currentRecordingType === 'filter') {
+        step = {
+          type: 'FILTER',
+          id: generateId('step'),
+          label: `Filter: ${data.label || 'element'}`,
+          selector: data.selector,
+          selectorStrategy,
+          fallbackXY: data.xy,
+          optionTexts: [],
+          clickOffAfter: true,
+        } as FilterStep;
       } else {
         step = {
           type: 'CLICK',

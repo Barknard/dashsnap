@@ -11,8 +11,8 @@ interface AppStore {
 
   // Recording
   isRecording: boolean;
-  recordingType: 'click' | 'snap' | 'screenshot' | 'hover' | 'select' | 'type' | 'scroll-element' | null;
-  startRecording: (type: 'click' | 'snap' | 'screenshot' | 'hover' | 'select' | 'type' | 'scroll-element') => void;
+  recordingType: 'click' | 'snap' | 'screenshot' | 'hover' | 'select' | 'type' | 'scroll-element' | 'search-select' | 'filter' | null;
+  startRecording: (type: 'click' | 'snap' | 'screenshot' | 'hover' | 'select' | 'type' | 'scroll-element' | 'search-select' | 'filter') => void;
   stopRecording: () => void;
 
   // Run state

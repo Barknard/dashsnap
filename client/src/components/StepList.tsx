@@ -5,7 +5,7 @@ import {
   MousePointer, Clock, Camera, Globe, ArrowDown,
   GripVertical, Pencil, X, ChevronUp, ChevronDown,
   Layout, Maximize2, SlidersHorizontal,
-  Hand, ListFilter, Type, ArrowDownUp,
+  Hand, ListFilter, Type, ArrowDownUp, Search, Filter,
 } from 'lucide-react';
 import { type FlowStep, type PptxLayout, type RunStepStatus, type SnapStep } from '@shared/types';
 import { Badge, stepTypeBadgeVariant } from './ui/Badge';
@@ -28,6 +28,8 @@ const stepIcons: Record<string, typeof MousePointer> = {
   SELECT: ListFilter,
   TYPE: Type,
   SCROLL_ELEMENT: ArrowDownUp,
+  SEARCH_SELECT: Search,
+  FILTER: Filter,
 };
 
 function stepDetail(step: FlowStep): string {
@@ -44,6 +46,8 @@ function stepDetail(step: FlowStep): string {
     case 'SELECT': return `${truncate(step.selector, 25)} → ${step.optionValue}`;
     case 'TYPE': return `"${truncate(step.text, 30)}"`;
     case 'SCROLL_ELEMENT': return `scrollTop: ${step.scrollTop}`;
+    case 'SEARCH_SELECT': return `"${truncate(step.searchText, 30)}"`;
+    case 'FILTER': return `${step.optionTexts?.length || 0} option(s)`;
     default: return '';
   }
 }

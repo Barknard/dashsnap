@@ -3,7 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as Slider from '@radix-ui/react-slider';
 import {
   MousePointer, Clock, Camera, Globe, ArrowDown, X, Copy, AlertTriangle,
-  Hand, ListFilter, Type, ArrowDownUp,
+  Hand, ListFilter, Type, ArrowDownUp, Search, Filter,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -22,6 +22,8 @@ const stepIcons: Record<string, typeof MousePointer> = {
   SELECT: ListFilter,
   TYPE: Type,
   SCROLL_ELEMENT: ArrowDownUp,
+  SEARCH_SELECT: Search,
+  FILTER: Filter,
 };
 
 interface StepEditDialogProps {
@@ -43,6 +45,10 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
   const [scrollTop, setScrollTop] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [clickOffAfter, setClickOffAfter] = useState(true);
+  const [searchText, setSearchText] = useState('');
+  const [waitForResults, setWaitForResults] = useState(1);
+  const [optionTexts, setOptionTexts] = useState('');
+  const [applySelector, setApplySelector] = useState('');
 
   useEffect(() => {
     if (!step) return;
@@ -53,6 +59,8 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
     if (step.type === 'SELECT') { setOptionValue(step.optionValue); setClickOffAfter(step.clickOffAfter !== false); }
     if (step.type === 'TYPE') { setTypeText(step.text); setClearFirst(step.clearFirst ?? false); setClickOffAfter(step.clickOffAfter !== false); }
     if (step.type === 'SCROLL_ELEMENT') { setScrollTop(step.scrollTop); setScrollLeft(step.scrollLeft ?? 0); }
+    if (step.type === 'SEARCH_SELECT') { setSearchText(step.searchText); setWaitForResults(step.waitForResults ?? 1); setClearFirst(step.clearFirst ?? false); setClickOffAfter(step.clickOffAfter !== false); }
+    if (step.type === 'FILTER') { setOptionTexts((step.optionTexts || []).join('\n')); setApplySelector(step.applySelector ?? ''); setClickOffAfter(step.clickOffAfter !== false); }
   }, [step]);
 
   if (!step) return null;
@@ -67,6 +75,8 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
     if (step.type === 'SELECT') { (updates as Record<string, unknown>).optionValue = optionValue; (updates as Record<string, unknown>).clickOffAfter = clickOffAfter; }
     if (step.type === 'TYPE') { (updates as Record<string, unknown>).text = typeText; (updates as Record<string, unknown>).clearFirst = clearFirst; (updates as Record<string, unknown>).clickOffAfter = clickOffAfter; }
     if (step.type === 'SCROLL_ELEMENT') { (updates as Record<string, unknown>).scrollTop = scrollTop; (updates as Record<string, unknown>).scrollLeft = scrollLeft; }
+    if (step.type === 'SEARCH_SELECT') { (updates as Record<string, unknown>).searchText = searchText; (updates as Record<string, unknown>).waitForResults = waitForResults; (updates as Record<string, unknown>).clearFirst = clearFirst; (updates as Record<string, unknown>).clickOffAfter = clickOffAfter; }
+    if (step.type === 'FILTER') { (updates as Record<string, unknown>).optionTexts = optionTexts.split('\n').map(s => s.trim()).filter(Boolean); (updates as Record<string, unknown>).applySelector = applySelector; (updates as Record<string, unknown>).clickOffAfter = clickOffAfter; }
     updateStep(step.id, updates);
     onClose();
   };
@@ -349,6 +359,98 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
                     />
                   </div>
                 </div>
+              </>
+            )}
+
+            {/* SEARCH_SELECT specific */}
+            {step.type === 'SEARCH_SELECT' && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ds-text-muted">Selector</label>
+                  <div className="flex gap-2">
+                    <div className="flex-1 h-9 px-3 flex items-center rounded-lg border border-ds-border bg-ds-bg text-sm text-ds-text-dim font-mono truncate">
+                      {step.selector}
+                    </div>
+                    <Button variant="outline" size="icon" onClick={handleCopySelector}>
+                      <Copy className={cn('w-3.5 h-3.5', copied && 'text-ds-emerald')} />
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ds-text-muted">Search Text</label>
+                  <Input
+                    value={searchText}
+                    onChange={e => setSearchText(e.target.value)}
+                    placeholder='e.g. Engineering or {{orgName}}'
+                  />
+                  <p className="text-[10px] text-ds-text-dim">
+                    Use {'{{variableName}}'} for CSV batch runs
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ds-text-muted">Wait for Results (seconds)</label>
+                  <Input
+                    type="number"
+                    min="0.5"
+                    step="0.5"
+                    value={waitForResults}
+                    onChange={e => setWaitForResults(parseFloat(e.target.value) || 1)}
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-ds-text-muted cursor-pointer">
+                  <input type="checkbox" checked={clearFirst} onChange={e => setClearFirst(e.target.checked)} className="rounded border-ds-border" />
+                  Clear field first
+                </label>
+                <label className="flex items-center gap-2 text-xs text-ds-text-muted cursor-pointer">
+                  <input type="checkbox" checked={clickOffAfter} onChange={e => setClickOffAfter(e.target.checked)} className="rounded border-ds-border" />
+                  Click off after (apply filter)
+                </label>
+              </>
+            )}
+
+            {/* FILTER specific */}
+            {step.type === 'FILTER' && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ds-text-muted">Filter Trigger Selector</label>
+                  <div className="flex gap-2">
+                    <div className="flex-1 h-9 px-3 flex items-center rounded-lg border border-ds-border bg-ds-bg text-sm text-ds-text-dim font-mono truncate">
+                      {step.selector}
+                    </div>
+                    <Button variant="outline" size="icon" onClick={handleCopySelector}>
+                      <Copy className={cn('w-3.5 h-3.5', copied && 'text-ds-emerald')} />
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ds-text-muted">Options to Select (one per line)</label>
+                  <textarea
+                    value={optionTexts}
+                    onChange={e => setOptionTexts(e.target.value)}
+                    rows={4}
+                    placeholder={'Option 1\nOption 2\n{{variableName}}'}
+                    className="w-full rounded-lg border border-ds-border bg-ds-bg text-sm text-ds-text p-2 resize-y font-mono"
+                  />
+                  <p className="text-[10px] text-ds-text-dim">
+                    Text labels of filter options. Use {'{{variableName}}'} for CSV batch runs.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ds-text-muted">Apply Button Selector (optional)</label>
+                  <Input
+                    value={applySelector}
+                    onChange={e => setApplySelector(e.target.value)}
+                    placeholder="Leave empty to re-click trigger"
+                    className="font-mono text-xs"
+                  />
+                  <p className="text-[10px] text-ds-text-dim">
+                    If empty, the filter trigger is clicked again to apply.
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-xs text-ds-text-muted cursor-pointer">
+                  <input type="checkbox" checked={clickOffAfter} onChange={e => setClickOffAfter(e.target.checked)} className="rounded border-ds-border" />
+                  Click off after (apply filter)
+                </label>
               </>
             )}
           </div>
