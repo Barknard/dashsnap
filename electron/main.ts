@@ -7,14 +7,15 @@ import {
   shell,
   session,
 } from 'electron';
-import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
-import { ConfigManager } from './config-manager';
-import { BrowserManager } from './browser-manager';
-import { Recorder } from './recorder';
-import { FlowRunner } from './flow-runner';
-import { PptxBuilder } from './pptx-builder';
+
+// Heavy modules loaded lazily so the splash screen can paint first
+type ConfigManager = import('./config-manager').ConfigManager;
+type BrowserManager = import('./browser-manager').BrowserManager;
+type Recorder = import('./recorder').Recorder;
+type FlowRunner = import('./flow-runner').FlowRunner;
+type PptxBuilder = import('./pptx-builder').PptxBuilder;
 
 // ─── Globals ────────────────────────────────────────────────────────────────
 
@@ -82,32 +83,40 @@ function splashProgress(percent: number, message: string) {
   }
 }
 
-function showSplash() {
-  splashWindow = new BrowserWindow({
-    width: 320,
-    height: 280,
-    frame: false,
-    resizable: false,
-    alwaysOnTop: true,
-    center: true,
-    skipTaskbar: false,
-    transparent: false,
-    show: true,
-    backgroundColor: '#13111C',
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      preload: path.join(__dirname, 'splash-preload.cjs'),
-    },
+function showSplash(): Promise<void> {
+  return new Promise((resolve) => {
+    splashWindow = new BrowserWindow({
+      width: 320,
+      height: 280,
+      frame: false,
+      resizable: false,
+      alwaysOnTop: true,
+      center: true,
+      skipTaskbar: false,
+      transparent: false,
+      show: false,            // show after content is painted
+      backgroundColor: '#13111C',
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        preload: path.join(__dirname, 'splash-preload.cjs'),
+      },
+    });
+
+    if (isDev) {
+      splashWindow.loadFile(path.join(path.dirname(__dirname), 'client', 'splash.html'));
+    } else {
+      splashWindow.loadFile(path.join(__dirname, '../dist/splash.html'));
+    }
+
+    // Show and resolve once the HTML is painted
+    splashWindow.once('ready-to-show', () => {
+      splashWindow?.show();
+      resolve();
+    });
+
+    splashWindow.once('closed', () => { splashWindow = null; });
   });
-
-  if (isDev) {
-    splashWindow.loadFile(path.join(path.dirname(__dirname), 'client', 'splash.html'));
-  } else {
-    splashWindow.loadFile(path.join(__dirname, '../dist/splash.html'));
-  }
-
-  splashWindow.once('closed', () => { splashWindow = null; });
 }
 
 function closeSplash() {
@@ -132,8 +141,15 @@ function createWindow() {
   ensureDir(path.join(appDataPath, 'config'));
   ensureDir(path.join(appDataPath, 'output'));
 
+  // Lazy-load heavy modules (deferred so splash can paint first)
+  const { ConfigManager: CM } = require('./config-manager') as typeof import('./config-manager');
+  const { BrowserManager: BM } = require('./browser-manager') as typeof import('./browser-manager');
+  const { Recorder: Rec } = require('./recorder') as typeof import('./recorder');
+  const { FlowRunner: FR } = require('./flow-runner') as typeof import('./flow-runner');
+  const { PptxBuilder: PB } = require('./pptx-builder') as typeof import('./pptx-builder');
+
   // Initialize managers
-  configManager = new ConfigManager(path.join(appDataPath, 'config'));
+  configManager = new CM(path.join(appDataPath, 'config'));
   const settings = configManager.loadSettings();
   sidebarWidth = settings.sidebarWidth || SIDEBAR_DEFAULT_WIDTH;
 
@@ -194,10 +210,10 @@ function createWindow() {
   splashProgress(55, 'Initializing modules...');
 
   // Initialize modules
-  browserManager = new BrowserManager(browserView, mainWindow);
-  recorder = new Recorder(browserView, mainWindow);
-  flowRunner = new FlowRunner(browserView, mainWindow, configManager);
-  pptxBuilder = new PptxBuilder(configManager);
+  browserManager = new BM(browserView, mainWindow);
+  recorder = new Rec(browserView, mainWindow);
+  flowRunner = new FR(browserView, mainWindow, configManager);
+  pptxBuilder = new PB(configManager);
 
   splashProgress(65, 'Loading interface...');
 
@@ -415,7 +431,8 @@ function setupIPC() {
   ipcMain.on('app:check-update', () => {
     mainWindow?.webContents.send('app:update-checking');
     if (app.isPackaged) {
-      autoUpdater.checkForUpdates().catch(() => {
+      const { autoUpdater: au } = require('electron-updater') as typeof import('electron-updater');
+      au.checkForUpdates().catch(() => {
         // electron-updater failed (portable build) — try GitHub API
         checkGitHubRelease();
       });
@@ -425,7 +442,8 @@ function setupIPC() {
     }
   });
   ipcMain.on('app:install-update', () => {
-    autoUpdater.quitAndInstall(false, true);
+    const { autoUpdater: au } = require('electron-updater') as typeof import('electron-updater');
+    au.quitAndInstall(false, true);
   });
   ipcMain.on('app:download-update', () => {
     downloadGitHubUpdate();
@@ -484,6 +502,8 @@ function setupIPC() {
 
 function setupAutoUpdater() {
   if (isDev) return;
+
+  const { autoUpdater } = require('electron-updater') as typeof import('electron-updater');
 
   // Try electron-updater first (works for NSIS installs)
   autoUpdater.autoDownload = true;
@@ -717,13 +737,13 @@ WshShell.Run """${batchPath.replace(/\\/g, '\\\\')}""", 0, False
 
 // ─── App lifecycle ──────────────────────────────────────────────────────────
 
-// Show splash at the absolute earliest moment — before whenReady() resolves
-app.once('browser-window-created', () => {}); // no-op, just ensure event loop
-app.on('ready', () => {
-  showSplash();
-});
+// Show splash immediately, wait for it to paint, THEN load heavy modules
+app.whenReady().then(async () => {
+  await showSplash();
 
-app.whenReady().then(() => {
+  // Yield one tick so the splash is fully visible before blocking with imports
+  await new Promise(r => setTimeout(r, 50));
+
   splashProgress(10, 'Loading configuration...');
   setupIPC();
   splashProgress(30, 'Creating window...');
