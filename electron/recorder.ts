@@ -537,6 +537,18 @@ const MACRO_OVERLAY_JS = `
     return text || el.tagName.toLowerCase();
   }
 
+  function getSimpleLabel(el) {
+    const tag = el.tagName.toLowerCase();
+    const text = (el.textContent || '').trim().substring(0, 30);
+    const ariaLabel = el.getAttribute('aria-label');
+    const role = el.getAttribute('role');
+    if (ariaLabel) return ariaLabel;
+    if (role && text) return text;
+    const typeMap = { button:'Button', a:'Link', input:'Input', select:'Dropdown', textarea:'Text area', img:'Image', svg:'Icon' };
+    const prefix = typeMap[tag] || tag;
+    return text ? prefix + ': ' + text : prefix;
+  }
+
   function getElementMeta(el) {
     const meta = { tagName: el.tagName.toLowerCase() };
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
@@ -560,29 +572,32 @@ const MACRO_OVERLAY_JS = `
     return false;
   }
 
-  // Inject inspect-style cursor
+  // Crosshair cursor
   const style = document.createElement('style');
   style.id = '__dashsnap_macro_style';
-  style.textContent = '.__dashsnap_macro_inspecting, .__dashsnap_macro_inspecting * { cursor: crosshair !important; }';
+  style.textContent = \`
+    .__dashsnap_recording, .__dashsnap_recording * { cursor: crosshair !important; }
+    @keyframes __ds_pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+  \`;
   document.head.appendChild(style);
-  document.documentElement.classList.add('__dashsnap_macro_inspecting');
+  document.documentElement.classList.add('__dashsnap_recording');
 
-  // Banner
+  // Banner — appended to document.body (proven pattern from v1.11)
   const banner = document.createElement('div');
   banner.id = '__dashsnap_macro_banner';
-  banner.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:13px system-ui;padding:10px 20px;border-radius:10px;border:2px solid #7C5CFC;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,0.4);display:flex;align-items:center;gap:10px;';
+  banner.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:13px system-ui;padding:8px 16px;border-radius:10px;border:2px solid #7C5CFC;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,0.4);display:flex;align-items:center;gap:10px;';
   document.body.appendChild(banner);
 
-  // Highlight
+  // Highlight — appended to document.body
   const highlight = document.createElement('div');
   highlight.id = '__dashsnap_macro_highlight';
   highlight.style.cssText = 'position:fixed;z-index:2147483646;border:2px solid #7C5CFC;background:rgba(124,92,252,0.12);border-radius:3px;pointer-events:none;display:none;transition:all 0.05s ease;';
   document.body.appendChild(highlight);
 
-  // Tooltip (follows cursor like Chrome inspect element)
+  // Tooltip — appended to document.body
   const tooltip = document.createElement('div');
   tooltip.id = '__dashsnap_macro_tooltip';
-  tooltip.style.cssText = 'position:fixed;z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:12px system-ui;padding:6px 10px;border-radius:6px;border:1px solid #7C5CFC;pointer-events:none;display:none;max-width:250px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+  tooltip.style.cssText = 'position:fixed;z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:12px system-ui;padding:6px 10px;border-radius:6px;border:1px solid #7C5CFC;pointer-events:none;display:none;max-width:250px;box-shadow:0 4px 12px rgba(0,0,0,0.3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
   document.body.appendChild(tooltip);
 
   function flashElement(el) {
@@ -600,48 +615,40 @@ const MACRO_OVERLAY_JS = `
 
   function updateBanner() {
     const count = window.__dashsnap_macro_actions.length;
-    banner.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;animation:pulse 1s infinite;display:inline-block"></span> '
-      + '<span style="color:#7C5CFC;font-weight:700">MACRO</span> — '
-      + count + ' action' + (count !== 1 ? 's' : '') + ' · '
-      + '<kbd style="background:#333;padding:2px 6px;border-radius:3px;font-size:10px">S</kbd> snap · '
-      + '<kbd style="background:#333;padding:2px 6px;border-radius:3px;font-size:10px">R</kbd> region · '
-      + '<kbd data-macro-done="true" style="background:#333;padding:2px 6px;border-radius:3px;font-size:10px;cursor:pointer;user-select:none">Enter</kbd> done';
+    banner.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;animation:__ds_pulse 1s infinite;display:inline-block"></span> '
+      + '<span style="color:#7C5CFC;font-weight:700">REC</span> — '
+      + count + ' action' + (count !== 1 ? 's' : '') + ' recorded · '
+      + '<kbd style="background:#333;padding:2px 6px;border-radius:3px;font-size:10px;pointer-events:none">S</kbd><span style="font-size:11px;color:#999;pointer-events:none"> snap</span> '
+      + '<kbd style="background:#333;padding:2px 6px;border-radius:3px;font-size:10px;pointer-events:none">R</kbd><span style="font-size:11px;color:#999;pointer-events:none"> region</span> · '
+      + '<button id="__ds_done_btn" style="background:#7C5CFC;color:white;border:none;padding:4px 14px;border-radius:6px;font:bold 12px system-ui;cursor:pointer;pointer-events:auto;">Done</button>';
+    // Make banner interactive for Done button
+    banner.style.pointerEvents = 'auto';
   }
   updateBanner();
-
-  function getSimpleLabel(el) {
-    const tag = el.tagName.toLowerCase();
-    const text = (el.textContent || '').trim().substring(0, 30);
-    const ariaLabel = el.getAttribute('aria-label');
-    const role = el.getAttribute('role');
-    if (ariaLabel) return ariaLabel;
-    if (role && text) return text;
-    const typeMap = { button:'Button', a:'Link', input:'Input', select:'Dropdown', textarea:'Text area', img:'Image', svg:'Icon' };
-    const prefix = typeMap[tag] || tag;
-    return text ? prefix + ': ' + text : prefix;
-  }
 
   let lastEl = null;
   function onMouseMove(e) {
     const el = e.target;
-    if (!el || el === banner || el === highlight || el === tooltip || el.closest('#__dashsnap_macro_banner')) return;
+    if (!el || el === tooltip || el === highlight || el === banner || el.closest('#__dashsnap_macro_banner')) return;
     if (el === lastEl) return;
     lastEl = el;
+
     const rect = el.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return;
     highlight.style.display = 'block';
     highlight.style.left = rect.left + 'px';
     highlight.style.top = rect.top + 'px';
     highlight.style.width = rect.width + 'px';
     highlight.style.height = rect.height + 'px';
+
     tooltip.textContent = getSimpleLabel(el);
     tooltip.style.display = 'block';
     tooltip.style.left = Math.min(e.clientX + 12, window.innerWidth - 260) + 'px';
-    tooltip.style.top = (e.clientY - 35) + 'px';
+    tooltip.style.top = Math.max(0, e.clientY - 35) + 'px';
   }
 
   // Scroll tracking (debounced)
   let scrollTimer = null;
-  let lastScrollEl = null;
   let lastScrollX = window.scrollX;
   let lastScrollY = window.scrollY;
   function onScroll(e) {
@@ -649,7 +656,6 @@ const MACRO_OVERLAY_JS = `
     const target = e.target;
     scrollTimer = setTimeout(() => {
       if (target === document || target === window || target === document.documentElement) {
-        // Page scroll
         const newX = window.scrollX;
         const newY = window.scrollY;
         if (newX !== lastScrollX || newY !== lastScrollY) {
@@ -663,7 +669,6 @@ const MACRO_OVERLAY_JS = `
           updateBanner();
         }
       } else if (target && target.nodeType === 1) {
-        // Element scroll
         const { selector, strategy } = getBestSelector(target);
         const rect = target.getBoundingClientRect();
         window.__dashsnap_macro_actions.push({
@@ -679,19 +684,24 @@ const MACRO_OVERLAY_JS = `
     }, 400);
   }
 
+  function finishRecording() {
+    if (window.__dashsnap_macro_actions.length > 0) {
+      window.__dashsnap_macro_done = true;
+      cleanup();
+    }
+  }
+
   function onClick(e) {
     const el = e.target;
-    if (!el || el === highlight) return;
-    // "Enter" button in banner or banner click = finish
-    if (el.closest('[data-macro-done]') || el === banner || el.closest('#__dashsnap_macro_banner')) {
+    if (!el) return;
+    // "Done" button or banner = finish recording
+    if (el.id === '__ds_done_btn' || el.closest('#__dashsnap_macro_banner')) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (window.__dashsnap_macro_actions.length > 0) {
-        window.__dashsnap_macro_done = true;
-        cleanup();
-      }
+      finishRecording();
       return;
     }
+    if (el === highlight || el === tooltip) return;
 
     // Let click go through to the page
     const { selector, strategy } = getBestSelector(el);
@@ -732,12 +742,12 @@ const MACRO_OVERLAY_JS = `
     const ctx = regionCanvas.getContext('2d');
     let drawing = false;
 
-    regionCanvas.addEventListener('mousedown', function(ev) {
+    regionCanvas.addEventListener('mousedown', (ev) => {
       regionStartX = ev.clientX;
       regionStartY = ev.clientY;
       drawing = true;
     });
-    regionCanvas.addEventListener('mousemove', function(ev) {
+    regionCanvas.addEventListener('mousemove', (ev) => {
       if (!drawing) return;
       ctx.clearRect(0, 0, regionCanvas.width, regionCanvas.height);
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -752,7 +762,7 @@ const MACRO_OVERLAY_JS = `
       ctx.setLineDash([6, 3]);
       ctx.strokeRect(x, y, w, h);
     });
-    regionCanvas.addEventListener('mouseup', function(ev) {
+    regionCanvas.addEventListener('mouseup', (ev) => {
       if (!drawing) return;
       drawing = false;
       const x = Math.min(regionStartX, ev.clientX);
@@ -771,7 +781,7 @@ const MACRO_OVERLAY_JS = `
         updateBanner();
       }
     });
-    regionCanvas.addEventListener('keydown', function(ev) {
+    regionCanvas.addEventListener('keydown', (ev) => {
       if (ev.key === 'Escape') {
         regionCanvas.remove();
         regionCanvas = null;
@@ -786,13 +796,10 @@ const MACRO_OVERLAY_JS = `
     if (e.key === 'Enter' && (e.target === document.body || e.target === document.documentElement)) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (window.__dashsnap_macro_actions.length > 0) {
-        window.__dashsnap_macro_done = true;
-        cleanup();
-      }
+      finishRecording();
     }
     // S = snap hovered element
-    if ((e.key === 's' || e.key === 'S') && lastEl && lastEl !== banner && lastEl !== highlight) {
+    if ((e.key === 's' || e.key === 'S') && lastEl && lastEl !== highlight && lastEl !== tooltip && lastEl !== banner) {
       e.preventDefault();
       e.stopImmediatePropagation();
       const rect = lastEl.getBoundingClientRect();
@@ -831,7 +838,7 @@ const MACRO_OVERLAY_JS = `
     document.removeEventListener('keydown', onKeyDown, true);
     document.removeEventListener('scroll', onScroll, true);
     window.removeEventListener('scroll', onScroll, true);
-    document.documentElement.classList.remove('__dashsnap_macro_inspecting');
+    document.documentElement.classList.remove('__dashsnap_recording');
     style.remove();
     banner.remove();
     highlight.remove();
