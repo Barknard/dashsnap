@@ -782,10 +782,12 @@ const MACRO_OVERLAY_JS = `
       ev.stopPropagation();
       finish(false);
     });
-    // Only Escape to dismiss — NO Enter key (avoids loop with page interaction)
     input.addEventListener('keydown', function(ev) {
       ev.stopPropagation(); // Prevent overlay's onKeyDown from seeing it
-      if (ev.key === 'Escape') {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        finish(true);
+      } else if (ev.key === 'Escape') {
         ev.preventDefault();
         finish(false);
       }
