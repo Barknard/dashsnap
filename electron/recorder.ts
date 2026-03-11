@@ -765,6 +765,8 @@ const MACRO_OVERLAY_JS = `
     if (!el || el === highlight) return;
     // Ignore clicks while text prompt is open
     if (promptOverlay) return;
+    // Ignore clicks while automated typing is in progress
+    if (window.__dashsnap_macro_typing) return;
     // Done button or banner click = finish recording
     if (el.id === '__ds_done_btn' || el === banner || el.closest('#__dashsnap_macro_banner')) {
       e.preventDefault();
@@ -1212,24 +1214,26 @@ export class Recorder {
     const wc = this.view.webContents;
     const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-    // Focus the element
+    // Set flag so overlay ignores focus — no click, just focus
+    await wc.executeJavaScript('window.__dashsnap_macro_typing = true;').catch(() => {});
+
     if (selector) {
       await wc.executeJavaScript(`
         (function() {
           var el = document.querySelector(${JSON.stringify(selector)});
-          if (el) { el.focus(); el.click(); }
+          if (el) el.focus();
         })()
       `).catch(() => {});
     }
     await delay(300);
 
-    // Check if element swapped (e.g. Google input→textarea) and re-focus
+    // Re-check focus (Google may swap input→textarea)
     await wc.executeJavaScript(`
       (function() {
         var el = document.activeElement;
         if (!el || el === document.body) {
           el = document.querySelector(${JSON.stringify(selector)});
-          if (el) { el.focus(); el.click(); }
+          if (el) el.focus();
         }
       })()
     `).catch(() => {});
@@ -1246,6 +1250,10 @@ export class Recorder {
       wc.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });
       wc.sendInputEvent({ type: 'keyUp', keyCode: 'Return' });
     }
+
+    // Clear the typing flag so overlay resumes normal click handling
+    await delay(500);
+    await wc.executeJavaScript('window.__dashsnap_macro_typing = false;').catch(() => {});
   }
 
   private stopPolling() {
