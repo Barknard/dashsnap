@@ -10,3 +10,4 @@ output/
 browser_profile/
 DashSnap_Data/
 package-lock.json
+test-overlay.html

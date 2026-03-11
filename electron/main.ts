@@ -142,11 +142,13 @@ function createWindow() {
   ensureDir(path.join(appDataPath, 'output'));
 
   // Lazy-load heavy modules (deferred so splash can paint first)
-  const { ConfigManager: CM } = require('./config-manager') as typeof import('./config-manager');
-  const { BrowserManager: BM } = require('./browser-manager') as typeof import('./browser-manager');
-  const { Recorder: Rec } = require('./recorder') as typeof import('./recorder');
-  const { FlowRunner: FR } = require('./flow-runner') as typeof import('./flow-runner');
-  const { PptxBuilder: PB } = require('./pptx-builder') as typeof import('./pptx-builder');
+  // Path is ./electron/* because TSC outputs to dist-electron/electron/
+  // while Vite outputs main.cjs to dist-electron/
+  const { ConfigManager: CM } = require('./electron/config-manager') as typeof import('./config-manager');
+  const { BrowserManager: BM } = require('./electron/browser-manager') as typeof import('./browser-manager');
+  const { Recorder: Rec } = require('./electron/recorder') as typeof import('./recorder');
+  const { FlowRunner: FR } = require('./electron/flow-runner') as typeof import('./flow-runner');
+  const { PptxBuilder: PB } = require('./electron/pptx-builder') as typeof import('./pptx-builder');
 
   // Initialize managers
   configManager = new CM(path.join(appDataPath, 'config'));

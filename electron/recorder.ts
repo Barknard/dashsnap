@@ -494,6 +494,13 @@ const MACRO_OVERLAY_JS = `
   window.__dashsnap_macro_cancelled = false;
   window.__dashsnap_macro_actions = [];
 
+  // Crosshair cursor during recording
+  const macroStyle = document.createElement('style');
+  macroStyle.id = '__dashsnap_macro_style';
+  macroStyle.textContent = '.__dashsnap_macro_recording, .__dashsnap_macro_recording * { cursor: crosshair !important; }';
+  document.head.appendChild(macroStyle);
+  document.documentElement.classList.add('__dashsnap_macro_recording');
+
   const getBestSelector = (function() {
     return function getBestSelector(el) {
       for (const attr of el.attributes) {
@@ -537,18 +544,6 @@ const MACRO_OVERLAY_JS = `
     return text || el.tagName.toLowerCase();
   }
 
-  function getSimpleLabel(el) {
-    const tag = el.tagName.toLowerCase();
-    const text = (el.textContent || '').trim().substring(0, 30);
-    const ariaLabel = el.getAttribute('aria-label');
-    const role = el.getAttribute('role');
-    if (ariaLabel) return ariaLabel;
-    if (role && text) return text;
-    const typeMap = { button:'Button', a:'Link', input:'Input', select:'Dropdown', textarea:'Text area', img:'Image', svg:'Icon' };
-    const prefix = typeMap[tag] || tag;
-    return text ? prefix + ': ' + text : prefix;
-  }
-
   function getElementMeta(el) {
     const meta = { tagName: el.tagName.toLowerCase() };
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
@@ -572,30 +567,17 @@ const MACRO_OVERLAY_JS = `
     return false;
   }
 
-  // Crosshair cursor
-  const style = document.createElement('style');
-  style.id = '__dashsnap_macro_style';
-  style.textContent = '.__dashsnap_recording, .__dashsnap_recording * { cursor: crosshair !important; } @keyframes __ds_pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }';
-  document.head.appendChild(style);
-  document.documentElement.classList.add('__dashsnap_recording');
-
-  // Banner — appended to document.body (proven pattern from v1.11)
+  // Banner — pointer-events:auto so Done button is clickable
   const banner = document.createElement('div');
   banner.id = '__dashsnap_macro_banner';
-  banner.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:13px system-ui;padding:8px 16px;border-radius:10px;border:2px solid #7C5CFC;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,0.4);display:flex;align-items:center;gap:10px;';
+  banner.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:13px system-ui;padding:10px 20px;border-radius:10px;border:2px solid #7C5CFC;pointer-events:auto;box-shadow:0 4px 20px rgba(0,0,0,0.4);display:flex;align-items:center;gap:10px;';
   document.body.appendChild(banner);
 
-  // Highlight — appended to document.body
+  // Highlight
   const highlight = document.createElement('div');
   highlight.id = '__dashsnap_macro_highlight';
   highlight.style.cssText = 'position:fixed;z-index:2147483646;border:2px solid #7C5CFC;background:rgba(124,92,252,0.12);border-radius:3px;pointer-events:none;display:none;transition:all 0.05s ease;';
   document.body.appendChild(highlight);
-
-  // Tooltip — appended to document.body
-  const tooltip = document.createElement('div');
-  tooltip.id = '__dashsnap_macro_tooltip';
-  tooltip.style.cssText = 'position:fixed;z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:12px system-ui;padding:6px 10px;border-radius:6px;border:1px solid #7C5CFC;pointer-events:none;display:none;max-width:250px;box-shadow:0 4px 12px rgba(0,0,0,0.3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
-  document.body.appendChild(tooltip);
 
   function flashElement(el) {
     const flash = document.createElement('div');
@@ -612,40 +594,41 @@ const MACRO_OVERLAY_JS = `
 
   function updateBanner() {
     const count = window.__dashsnap_macro_actions.length;
-    banner.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;animation:__ds_pulse 1s infinite;display:inline-block"></span> '
-      + '<span style="color:#7C5CFC;font-weight:700">REC</span> — '
-      + count + ' action' + (count !== 1 ? 's' : '') + ' recorded · '
-      + '<kbd style="background:#333;padding:2px 6px;border-radius:3px;font-size:10px;pointer-events:none">S</kbd><span style="font-size:11px;color:#999;pointer-events:none"> snap</span> '
-      + '<kbd style="background:#333;padding:2px 6px;border-radius:3px;font-size:10px;pointer-events:none">R</kbd><span style="font-size:11px;color:#999;pointer-events:none"> region</span> · '
-      + '<button id="__ds_done_btn" style="background:#7C5CFC;color:white;border:none;padding:4px 14px;border-radius:6px;font:bold 12px system-ui;cursor:pointer;pointer-events:auto;">Done</button>';
-    // Make banner interactive for Done button
-    banner.style.pointerEvents = 'auto';
+    banner.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;animation:pulse 1s infinite;display:inline-block"></span> '
+      + '<span style="color:#7C5CFC;font-weight:700">REC</span> '
+      + count + ' action' + (count !== 1 ? 's' : '') + ' · '
+      + '<span style="font-size:10px;color:#aaa"><kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">S</kbd> snap element · <kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">R</kbd> snap region</span> · '
+      + '<button id="__ds_done_btn" style="background:#7C5CFC;color:white;border:none;padding:5px 16px;border-radius:6px;font:bold 12px system-ui;cursor:pointer;">Done</button>';
   }
   updateBanner();
+
+  // Tooltip for hovered element
+  const tooltip = document.createElement('div');
+  tooltip.id = '__dashsnap_macro_tooltip';
+  tooltip.style.cssText = 'position:fixed;z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:12px system-ui;padding:6px 10px;border-radius:6px;border:1px solid #7C5CFC;pointer-events:none;display:none;max-width:250px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+  document.body.appendChild(tooltip);
 
   let lastEl = null;
   function onMouseMove(e) {
     const el = e.target;
-    if (!el || el === tooltip || el === highlight || el === banner || el.closest('#__dashsnap_macro_banner')) return;
+    if (!el || el === banner || el === highlight || el === tooltip || el.closest('#__dashsnap_macro_banner')) return;
     if (el === lastEl) return;
     lastEl = el;
-
     const rect = el.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) return;
     highlight.style.display = 'block';
     highlight.style.left = rect.left + 'px';
     highlight.style.top = rect.top + 'px';
     highlight.style.width = rect.width + 'px';
     highlight.style.height = rect.height + 'px';
-
-    tooltip.textContent = getSimpleLabel(el);
+    tooltip.textContent = getLabel(el);
     tooltip.style.display = 'block';
     tooltip.style.left = Math.min(e.clientX + 12, window.innerWidth - 260) + 'px';
-    tooltip.style.top = Math.max(0, e.clientY - 35) + 'px';
+    tooltip.style.top = (e.clientY - 35) + 'px';
   }
 
   // Scroll tracking (debounced)
   let scrollTimer = null;
+  let lastScrollEl = null;
   let lastScrollX = window.scrollX;
   let lastScrollY = window.scrollY;
   function onScroll(e) {
@@ -653,6 +636,7 @@ const MACRO_OVERLAY_JS = `
     const target = e.target;
     scrollTimer = setTimeout(() => {
       if (target === document || target === window || target === document.documentElement) {
+        // Page scroll
         const newX = window.scrollX;
         const newY = window.scrollY;
         if (newX !== lastScrollX || newY !== lastScrollY) {
@@ -666,6 +650,7 @@ const MACRO_OVERLAY_JS = `
           updateBanner();
         }
       } else if (target && target.nodeType === 1) {
+        // Element scroll
         const { selector, strategy } = getBestSelector(target);
         const rect = target.getBoundingClientRect();
         window.__dashsnap_macro_actions.push({
@@ -681,24 +666,19 @@ const MACRO_OVERLAY_JS = `
     }, 400);
   }
 
-  function finishRecording() {
-    if (window.__dashsnap_macro_actions.length > 0) {
-      window.__dashsnap_macro_done = true;
-      cleanup();
-    }
-  }
-
   function onClick(e) {
     const el = e.target;
-    if (!el) return;
-    // "Done" button or banner = finish recording
-    if (el.id === '__ds_done_btn' || el.closest('#__dashsnap_macro_banner')) {
+    if (!el || el === highlight) return;
+    // Done button or banner click = finish recording
+    if (el.id === '__ds_done_btn' || el === banner || el.closest('#__dashsnap_macro_banner')) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      finishRecording();
+      if (window.__dashsnap_macro_actions.length > 0) {
+        window.__dashsnap_macro_done = true;
+        cleanup();
+      }
       return;
     }
-    if (el === highlight || el === tooltip) return;
 
     // Let click go through to the page
     const { selector, strategy } = getBestSelector(el);
@@ -721,100 +701,84 @@ const MACRO_OVERLAY_JS = `
     updateBanner();
   }
 
-  // Region-draw mode for screenshots
-  let drawingRegion = false;
-  let regionCanvas = null;
-  let regionStartX = 0, regionStartY = 0;
-
-  function startRegionDraw() {
-    drawingRegion = true;
-    highlight.style.display = 'none';
-    tooltip.style.display = 'none';
-    regionCanvas = document.createElement('canvas');
-    regionCanvas.width = window.innerWidth;
-    regionCanvas.height = window.innerHeight;
-    regionCanvas.style.cssText = 'position:fixed;top:0;left:0;z-index:2147483647;cursor:crosshair;';
-    document.body.appendChild(regionCanvas);
-
-    const ctx = regionCanvas.getContext('2d');
-    let drawing = false;
-
-    regionCanvas.addEventListener('mousedown', (ev) => {
-      regionStartX = ev.clientX;
-      regionStartY = ev.clientY;
-      drawing = true;
-    });
-    regionCanvas.addEventListener('mousemove', (ev) => {
-      if (!drawing) return;
-      ctx.clearRect(0, 0, regionCanvas.width, regionCanvas.height);
-      ctx.fillStyle = 'rgba(0,0,0,0.3)';
-      ctx.fillRect(0, 0, regionCanvas.width, regionCanvas.height);
-      const x = Math.min(regionStartX, ev.clientX);
-      const y = Math.min(regionStartY, ev.clientY);
-      const w = Math.abs(ev.clientX - regionStartX);
-      const h = Math.abs(ev.clientY - regionStartY);
-      ctx.clearRect(x, y, w, h);
-      ctx.strokeStyle = '#22D3EE';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 3]);
-      ctx.strokeRect(x, y, w, h);
-    });
-    regionCanvas.addEventListener('mouseup', (ev) => {
-      if (!drawing) return;
-      drawing = false;
-      const x = Math.min(regionStartX, ev.clientX);
-      const y = Math.min(regionStartY, ev.clientY);
-      const w = Math.abs(ev.clientX - regionStartX);
-      const h = Math.abs(ev.clientY - regionStartY);
-      regionCanvas.remove();
-      regionCanvas = null;
-      drawingRegion = false;
-      if (w >= 10 && h >= 10) {
-        window.__dashsnap_macro_actions.push({
-          action: 'snap',
-          label: 'Screenshot ' + Math.round(w) + 'x' + Math.round(h) + 'px',
-          snapRegion: { x: Math.round(x), y: Math.round(y), width: Math.round(w), height: Math.round(h) },
-        });
-        updateBanner();
-      }
-    });
-    regionCanvas.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape') {
-        regionCanvas.remove();
-        regionCanvas = null;
-        drawingRegion = false;
-      }
-    });
-  }
-
   function onKeyDown(e) {
-    if (drawingRegion) return;
-
+    // S key = snapshot hovered element (skip if typing in an input)
+    if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      var active = document.activeElement;
+      var isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.contentEditable === 'true');
+      if (!isInput && lastEl && lastEl !== highlight && lastEl !== tooltip && lastEl !== banner && !lastEl.closest('#__dashsnap_macro_banner')) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        var rect = lastEl.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          window.__dashsnap_macro_actions.push({
+            action: 'snap',
+            label: 'Snap: ' + getLabel(lastEl),
+            snapRegion: { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
+          });
+          flashElement(lastEl);
+          updateBanner();
+        }
+        return;
+      }
+    }
+    // R key = snapshot drawn region (skip if typing)
+    if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      var active = document.activeElement;
+      var isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.contentEditable === 'true');
+      if (!isInput) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        // Temporarily hide macro overlay, show snap region drawer
+        highlight.style.display = 'none';
+        tooltip.style.display = 'none';
+        banner.style.display = 'none';
+        // Inline region drawer
+        var canvas = document.createElement('canvas');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        canvas.style.cssText = 'position:fixed;top:0;left:0;z-index:2147483647;cursor:crosshair;';
+        document.body.appendChild(canvas);
+        var ctx = canvas.getContext('2d');
+        var sx = 0, sy = 0, drawing = false;
+        canvas.addEventListener('mousedown', function(ev) { sx = ev.clientX; sy = ev.clientY; drawing = true; });
+        canvas.addEventListener('mousemove', function(ev) {
+          if (!drawing) return;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = 'rgba(0,0,0,0.3)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          var rx = Math.min(sx, ev.clientX), ry = Math.min(sy, ev.clientY);
+          var rw = Math.abs(ev.clientX - sx), rh = Math.abs(ev.clientY - sy);
+          ctx.clearRect(rx, ry, rw, rh);
+          ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2; ctx.setLineDash([6,3]);
+          ctx.strokeRect(rx, ry, rw, rh);
+        });
+        canvas.addEventListener('mouseup', function(ev) {
+          if (!drawing) return;
+          drawing = false;
+          var rx = Math.min(sx, ev.clientX), ry = Math.min(sy, ev.clientY);
+          var rw = Math.abs(ev.clientX - sx), rh = Math.abs(ev.clientY - sy);
+          canvas.remove();
+          banner.style.display = 'flex';
+          if (rw >= 10 && rh >= 10) {
+            window.__dashsnap_macro_actions.push({
+              action: 'snap',
+              label: 'Snap region ' + rw + 'x' + rh,
+              snapRegion: { x: Math.round(rx), y: Math.round(ry), width: Math.round(rw), height: Math.round(rh) },
+            });
+            updateBanner();
+          }
+        });
+        return;
+      }
+    }
     if (e.key === 'Enter' && (e.target === document.body || e.target === document.documentElement)) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      finishRecording();
-    }
-    // S = snap hovered element
-    if ((e.key === 's' || e.key === 'S') && lastEl && lastEl !== highlight && lastEl !== tooltip && lastEl !== banner) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const rect = lastEl.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        window.__dashsnap_macro_actions.push({
-          action: 'snap',
-          label: 'Snap: ' + getLabel(lastEl),
-          snapRegion: { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
-        });
-        flashElement(lastEl);
-        updateBanner();
+      if (window.__dashsnap_macro_actions.length > 0) {
+        window.__dashsnap_macro_done = true;
+        cleanup();
       }
-    }
-    // R = draw region screenshot
-    if (e.key === 'r' || e.key === 'R') {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      startRegionDraw();
     }
     if (e.key === 'Escape') {
       window.__dashsnap_macro_cancelled = true;
@@ -835,11 +799,11 @@ const MACRO_OVERLAY_JS = `
     document.removeEventListener('keydown', onKeyDown, true);
     document.removeEventListener('scroll', onScroll, true);
     window.removeEventListener('scroll', onScroll, true);
-    document.documentElement.classList.remove('__dashsnap_recording');
-    style.remove();
     banner.remove();
     highlight.remove();
     tooltip.remove();
+    document.documentElement.classList.remove('__dashsnap_macro_recording');
+    if (macroStyle.parentNode) macroStyle.remove();
     window.__dashsnap_macro_active = false;
   }
 
@@ -851,6 +815,7 @@ export class Recorder {
   private view: BrowserView;
   private window: BrowserWindow;
   private pollInterval: ReturnType<typeof setInterval> | null = null;
+  private _macroNavHandler: (() => void) | null = null;
 
   constructor(view: BrowserView, window: BrowserWindow) {
     this.view = view;
@@ -903,24 +868,15 @@ export class Recorder {
 
   async startMacroRecording() {
     this.stopPolling();
-    try {
-      console.log('[Recorder] Injecting MACRO_OVERLAY_JS into BrowserView...');
-      await this.view.webContents.executeJavaScript(MACRO_OVERLAY_JS);
-      console.log('[Recorder] MACRO_OVERLAY_JS injected successfully');
-      // Verify the overlay was actually created
-      const check = await this.view.webContents.executeJavaScript(`
-        JSON.stringify({
-          active: !!window.__dashsnap_macro_active,
-          banner: !!document.getElementById('__dashsnap_macro_banner'),
-          highlight: !!document.getElementById('__dashsnap_macro_highlight'),
-          tooltip: !!document.getElementById('__dashsnap_macro_tooltip'),
-          hasRecordingClass: document.documentElement.classList.contains('__dashsnap_recording'),
-        })
-      `);
-      console.log('[Recorder] Overlay status:', check);
-    } catch (err) {
-      console.error('[Recorder] Failed to inject MACRO_OVERLAY_JS:', err);
-    }
+    await this.view.webContents.executeJavaScript(MACRO_OVERLAY_JS);
+    // Re-inject overlay after page navigation so highlight persists
+    this._macroNavHandler = () => {
+      setTimeout(() => {
+        this.view.webContents.executeJavaScript(MACRO_OVERLAY_JS).catch(() => {});
+      }, 500);
+    };
+    this.view.webContents.on('did-navigate', this._macroNavHandler);
+    this.view.webContents.on('did-navigate-in-page', this._macroNavHandler);
     this.pollForMacroResult();
   }
 
@@ -1071,6 +1027,11 @@ export class Recorder {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
+    }
+    if (this._macroNavHandler) {
+      this.view.webContents.removeListener('did-navigate', this._macroNavHandler);
+      this.view.webContents.removeListener('did-navigate-in-page', this._macroNavHandler);
+      this._macroNavHandler = null;
     }
   }
 }
