@@ -690,8 +690,7 @@ const MACRO_OVERLAY_JS = `
       lastEl = null;
       return;
     }
-    // Show the interactive ancestor, not the inner div/span
-    const el = findInteractiveAncestor(rawEl);
+    const el = rawEl;
     if (el === lastEl) return;
     lastEl = el;
     const rect = el.getBoundingClientRect();
@@ -874,7 +873,7 @@ const MACRO_OVERLAY_JS = `
     if (promptOverlay) return;
     if (window.__dashsnap_macro_typing) return;
     // Done button or banner
-    if (rawEl.id === '__ds_done_btn' || rawEl === banner || rawEl.closest('#__dashsnap_macro_banner')) {
+    if (rawEl.id === '__ds_done_btn' || rawEl === banner || (rawEl.closest && rawEl.closest('#__dashsnap_macro_banner'))) {
       if (window.__dashsnap_macro_actions.length > 0) {
         window.__dashsnap_macro_done = true;
         cleanup();
@@ -886,7 +885,9 @@ const MACRO_OVERLAY_JS = `
       return;
     }
 
-    const el = findInteractiveAncestor(rawEl);
+    // Use the exact clicked element — don't walk up the DOM.
+    // This matches v1.10 behavior and works with custom dropdown options.
+    const el = rawEl;
     const rect = el.getBoundingClientRect();
     var xyKey = Math.round(rect.left) + ',' + Math.round(rect.top);
     var now = Date.now();
