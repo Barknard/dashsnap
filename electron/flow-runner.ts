@@ -339,14 +339,38 @@ export class FlowRunner {
     `).catch(() => null);
   }
 
-  private async waitForNavigation(wc: Electron.WebContents, timeoutMs: number = 8000): Promise<void> {
-    await new Promise<void>((resolve) => {
+  /**
+   * After firing a click, wait smartly: if navigation starts, wait for page load.
+   * Otherwise wait a short default. Returns quickly when the page is ready.
+   */
+  private async waitAfterClick(wc: Electron.WebContents, waitSeconds: number): Promise<void> {
+    // Listen for navigation starting within 500ms of the click
+    const navStarted = await new Promise<boolean>((resolve) => {
       let resolved = false;
-      const onStop = () => { if (!resolved) { resolved = true; resolve(); } };
-      wc.once('did-stop-loading', onStop);
-      setTimeout(() => { wc.removeListener('did-stop-loading', onStop); onStop(); }, timeoutMs);
+      const onStart = () => { if (!resolved) { resolved = true; resolve(true); } };
+      wc.once('did-start-loading', onStart);
+      setTimeout(() => {
+        wc.removeListener('did-start-loading', onStart);
+        if (!resolved) { resolved = true; resolve(false); }
+      }, 500);
     });
-    await this.delay(500);
+
+    if (navStarted) {
+      // Navigation detected — wait for page to finish loading (up to 10s)
+      console.log('[Playback] Navigation detected, waiting for page load...');
+      await new Promise<void>((resolve) => {
+        let resolved = false;
+        const onStop = () => { if (!resolved) { resolved = true; resolve(); } };
+        wc.once('did-stop-loading', onStop);
+        setTimeout(() => { wc.removeListener('did-stop-loading', onStop); onStop(); }, 10000);
+      });
+      // Short settle time for dynamic content after load
+      await this.delay(800);
+      console.log('[Playback] Page loaded, continuing.');
+    } else {
+      // No navigation — just a regular click, use configured wait
+      await this.delay(waitSeconds * 1000);
+    }
   }
 
   private async executeClick(
@@ -354,7 +378,6 @@ export class FlowRunner {
     waitSeconds: number,
   ): Promise<'success' | 'warning'> {
     const wc = this.view.webContents;
-    const urlBefore = wc.getURL();
 
     // Try selector with retries — element may not exist yet after page navigation
     if (step.selector) {
@@ -364,22 +387,11 @@ export class FlowRunner {
 
         if (rect) {
           console.log(`[Playback] Click: found at (${rect.x}, ${rect.y}) — <${rect.tag}> "${rect.text}"`);
-          // Use trusted mouse events so links and navigation actually work
           wc.sendInputEvent({ type: 'mouseDown', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
           wc.sendInputEvent({ type: 'mouseUp', x: rect.x, y: rect.y, button: 'left', clickCount: 1 });
-
-          // Check if click triggered navigation (link click)
-          await this.delay(500);
-          const urlAfter = wc.getURL();
-          if (urlAfter !== urlBefore) {
-            console.log(`[Playback] Click triggered navigation: ${urlAfter.substring(0, 80)}...`);
-            await this.waitForNavigation(wc);
-          }
-
-          await this.delay(waitSeconds * 1000);
+          await this.waitAfterClick(wc, waitSeconds);
           return 'success';
         }
-        // Element not found yet — wait and retry (page may still be loading)
         console.log(`[Playback] Click: selector not found, retrying in 1s...`);
         await this.delay(1000);
       }
@@ -392,16 +404,7 @@ export class FlowRunner {
       console.log(`[Playback] Click: using fallback XY (${x}, ${y})`);
       wc.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
       wc.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
-
-      // Check if click triggered navigation
-      await this.delay(500);
-      const urlAfter = wc.getURL();
-      if (urlAfter !== urlBefore) {
-        console.log(`[Playback] Fallback click triggered navigation: ${urlAfter.substring(0, 80)}...`);
-        await this.waitForNavigation(wc);
-      }
-
-      await this.delay(waitSeconds * 1000);
+      await this.waitAfterClick(wc, waitSeconds);
       return 'warning';
     }
 
@@ -426,23 +429,12 @@ export class FlowRunner {
     }
 
     // Send the keypress
+    console.log(`[Playback] KeyPress: ${key}`);
     wc.sendInputEvent({ type: 'keyDown', keyCode: key });
     wc.sendInputEvent({ type: 'keyUp', keyCode: key });
 
-    // If Enter key, wait for any navigation to complete (page load)
-    if (key === 'Enter' || key === 'Return') {
-      await new Promise<void>((resolve) => {
-        let resolved = false;
-        const onStop = () => { if (!resolved) { resolved = true; resolve(); } };
-        wc.once('did-stop-loading', onStop);
-        // Timeout fallback in case no navigation happens
-        setTimeout(() => { wc.removeListener('did-stop-loading', onStop); onStop(); }, 8000);
-      });
-      // Extra settle time for dynamic content
-      await this.delay(1000);
-    }
-
-    await this.delay(waitSeconds * 1000);
+    // Use smart wait — detects navigation automatically
+    await this.waitAfterClick(wc, waitSeconds);
     return 'success';
   }
 
