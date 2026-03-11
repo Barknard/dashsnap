@@ -660,13 +660,33 @@ const MACRO_OVERLAY_JS = `
 
   function updateBanner() {
     var count = window.__dashsnap_macro_actions.length;
-    banner.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;animation:pulse 1s infinite;display:inline-block"></span> '
+    var html = '<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;animation:pulse 1s infinite;display:inline-block"></span> '
       + '<span style="color:#7C5CFC;font-weight:700">REC</span> '
-      + count + ' action' + (count !== 1 ? 's' : '') + ' \\u00b7 '
-      + '<span style="font-size:10px;color:#aaa"><kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">S</kbd> snap element \\u00b7 <kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">R</kbd> snap region</span> \\u00b7 '
+      + '<span id="__ds_action_count">' + count + ' action' + (count !== 1 ? 's' : '') + '</span>'
+      + ' \\u00b7 '
+      + '<span style="font-size:10px;color:#aaa"><kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">S</kbd> snap \\u00b7 <kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">R</kbd> region</span>'
+      + ' \\u00b7 '
       + '<button id="__ds_done_btn" style="background:#7C5CFC;color:white;border:none;padding:5px 16px;border-radius:6px;font:bold 12px system-ui;cursor:pointer;">Done</button>';
+    banner.innerHTML = html;
+    // Force reflow to ensure the update is painted
+    banner.offsetHeight;
   }
   updateBanner();
+
+  // Done button — banner sits above the shield, so handle clicks directly on it
+  banner.addEventListener('click', function(e) {
+    var target = e.target;
+    if (target.id === '__ds_done_btn' || (target.closest && target.closest('#__ds_done_btn'))) {
+      if (window.__dashsnap_macro_actions.length > 0) {
+        window.__dashsnap_macro_done = true;
+        cleanup();
+      } else {
+        banner.style.borderColor = '#EF4444';
+        banner.style.transition = 'border-color 0.3s';
+        setTimeout(function() { banner.style.borderColor = '#7C5CFC'; }, 800);
+      }
+    }
+  });
 
   // --- Hover tracking (on the shield, resolve element underneath) ---
   var lastEl = null;
@@ -675,8 +695,9 @@ const MACRO_OVERLAY_JS = `
   clickShield.addEventListener('mousemove', function(e) {
     lastClientX = e.clientX;
     lastClientY = e.clientY;
-    // Temporarily hide shield to find the real element underneath
+    // Temporarily hide shield + highlight to find the real element underneath
     clickShield.style.pointerEvents = 'none';
+    var prevHighlight = highlight.style.display;
     highlight.style.display = 'none';
     var el = document.elementFromPoint(e.clientX, e.clientY);
     clickShield.style.pointerEvents = 'auto';
@@ -686,12 +707,7 @@ const MACRO_OVERLAY_JS = `
       lastEl = null;
       return;
     }
-    if (el === lastEl) {
-      // Still update tooltip position even if same element
-      tooltip.style.left = Math.min(e.clientX + 12, window.innerWidth - 260) + 'px';
-      tooltip.style.top = (e.clientY - 35) + 'px';
-      return;
-    }
+    // Restore and update highlight for current element
     lastEl = el;
     var rect = el.getBoundingClientRect();
     highlight.style.display = 'block';
