@@ -151,9 +151,16 @@ function createWindow() {
     path.join(appDataPath, 'browser_profile');
   ensureDir(browserProfilePath);
 
+  // Redirect session storage to our stable data folder so cookies,
+  // certificates, and auth tokens persist across launches
+  app.setPath('sessionData', browserProfilePath);
+
   const persistSession = session.fromPartition('persist:dashsnap', {
     cache: true,
   });
+
+  // Enable persistent cookie storage (don't treat all cookies as session-only)
+  persistSession.cookies.flushStore().catch(() => {});
 
   browserView = new BrowserView({
     webPreferences: {
@@ -706,5 +713,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  app.quit();
+  // Flush cookies to disk before quitting so auth persists
+  const ses = session.fromPartition('persist:dashsnap');
+  ses.cookies.flushStore().catch(() => {}).finally(() => app.quit());
 });
