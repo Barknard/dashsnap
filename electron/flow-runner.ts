@@ -248,6 +248,8 @@ export class FlowRunner {
           break;
 
         case 'SNAP': {
+          // Wait for page to finish rendering before capturing
+          await this.delay(defaults.stepWaitSeconds * 1000);
           const screenshotPath = await this.executeSnap(step, outputDir, screenshots.length);
           if (screenshotPath) {
             screenshots.push({ name: step.label, path: screenshotPath, slideLayout: (step as SnapStep).slideLayout });

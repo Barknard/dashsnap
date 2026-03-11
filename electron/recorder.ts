@@ -658,20 +658,19 @@ const MACRO_OVERLAY_JS = `
     setTimeout(function() { flash.remove(); }, 600);
   }
 
+  // Set banner HTML once — only the count span gets updated
+  banner.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;animation:pulse 1s infinite;display:inline-block"></span> '
+    + '<span style="color:#7C5CFC;font-weight:700">REC</span> '
+    + '<span id="__ds_action_count">0 actions</span>'
+    + ' \\u00b7 '
+    + '<span style="font-size:10px;color:#aaa"><kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">S</kbd> snap \\u00b7 <kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">R</kbd> region</span>'
+    + ' \\u00b7 '
+    + '<button id="__ds_done_btn" style="background:#7C5CFC;color:white;border:none;padding:5px 16px;border-radius:6px;font:bold 12px system-ui;cursor:pointer;">Done</button>';
+  var countSpan = document.getElementById('__ds_action_count');
   function updateBanner() {
     var count = window.__dashsnap_macro_actions.length;
-    var html = '<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;animation:pulse 1s infinite;display:inline-block"></span> '
-      + '<span style="color:#7C5CFC;font-weight:700">REC</span> '
-      + '<span id="__ds_action_count">' + count + ' action' + (count !== 1 ? 's' : '') + '</span>'
-      + ' \\u00b7 '
-      + '<span style="font-size:10px;color:#aaa"><kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">S</kbd> snap \\u00b7 <kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">R</kbd> region</span>'
-      + ' \\u00b7 '
-      + '<button id="__ds_done_btn" style="background:#7C5CFC;color:white;border:none;padding:5px 16px;border-radius:6px;font:bold 12px system-ui;cursor:pointer;">Done</button>';
-    banner.innerHTML = html;
-    // Force reflow to ensure the update is painted
-    banner.offsetHeight;
+    countSpan.textContent = count + ' action' + (count !== 1 ? 's' : '');
   }
-  updateBanner();
 
   // Done button — banner sits above the shield, so handle clicks directly on it
   banner.addEventListener('click', function(e) {
