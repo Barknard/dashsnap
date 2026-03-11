@@ -240,15 +240,17 @@ export class FlowRunner {
   ): Promise<RunStepResult> {
     const result: RunStepResult = { stepId: step.id, status: 'pending' };
     logLines.push(`Step: ${step.type} — ${step.label}`);
-    console.log(`[Playback] ── Step: ${step.type} — ${step.label} (selector: ${(step as any).selector || 'none'}, strategy: ${(step as any).selectorStrategy || 'n/a'})`);
+    // Per-step wait override with 1.5327s minimum, falling back to global default
+    const wait = Math.max(1.5327, step.waitOverride ?? defaults.stepWaitSeconds);
+    console.log(`[Playback] ── Step: ${step.type} — ${step.label} (wait: ${wait}s, selector: ${(step as any).selector || 'none'}, strategy: ${(step as any).selectorStrategy || 'n/a'})`);
 
     try {
       switch (step.type) {
         case 'CLICK':
           if (step.keyPress) {
-            result.status = await this.executeKeyPress(step, defaults.stepWaitSeconds);
+            result.status = await this.executeKeyPress(step, wait);
           } else {
-            result.status = await this.executeClick(step, defaults.stepWaitSeconds);
+            result.status = await this.executeClick(step, wait);
           }
           break;
 
@@ -259,7 +261,7 @@ export class FlowRunner {
 
         case 'SNAP': {
           // Wait for page to finish rendering before capturing
-          await this.delay(defaults.stepWaitSeconds * 1000);
+          await this.delay(wait * 1000);
           const screenshotPath = await this.executeSnap(step, outputDir, screenshots.length);
           if (screenshotPath) {
             screenshots.push({ name: step.label, path: screenshotPath, slideLayout: (step as SnapStep).slideLayout });
@@ -269,7 +271,7 @@ export class FlowRunner {
             result.status = 'error';
             result.message = 'Screenshot capture failed';
           }
-          await this.delay(defaults.stepWaitSeconds * 1000);
+          await this.delay(wait * 1000);
           break;
         }
 
@@ -287,15 +289,15 @@ export class FlowRunner {
           break;
 
         case 'HOVER':
-          result.status = await this.executeHover(step, defaults.stepWaitSeconds);
+          result.status = await this.executeHover(step, wait);
           break;
 
         case 'SELECT':
-          result.status = await this.executeSelect(step, defaults.stepWaitSeconds);
+          result.status = await this.executeSelect(step, wait);
           break;
 
         case 'TYPE':
-          result.status = await this.executeType(step, defaults.stepWaitSeconds);
+          result.status = await this.executeType(step, wait);
           break;
 
         case 'SCROLL_ELEMENT':
@@ -303,11 +305,11 @@ export class FlowRunner {
           break;
 
         case 'SEARCH_SELECT':
-          result.status = await this.executeSearchSelect(step, defaults.stepWaitSeconds);
+          result.status = await this.executeSearchSelect(step, wait);
           break;
 
         case 'FILTER':
-          result.status = await this.executeFilter(step, defaults.stepWaitSeconds);
+          result.status = await this.executeFilter(step, wait);
           break;
 
         case 'MACRO':

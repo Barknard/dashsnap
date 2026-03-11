@@ -361,16 +361,43 @@ export function StepList({ onEditStep }: StepListProps) {
                       {step.label}
                     </span>
                   </div>
-                  <p className="text-xs text-ds-text-dim truncate mt-0.5">
-                    {isSnap
-                      ? hasCustomLayout
-                        ? `${stepDetail(step)} · Custom slide layout`
-                        : `${stepDetail(step)} · Click to set slide layout`
-                      : stepDetail(step)}
-                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <p className="text-xs text-ds-text-dim truncate">
+                      {isSnap
+                        ? hasCustomLayout
+                          ? `${stepDetail(step)} · Custom layout`
+                          : stepDetail(step)
+                        : stepDetail(step)}
+                    </p>
+                    {step.type !== 'WAIT' && step.type !== 'NAVIGATE' && (
+                      <span
+                        className="inline-flex items-center gap-0.5 shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Clock className="w-2.5 h-2.5 text-ds-text-dim" />
+                        <input
+                          type="number"
+                          min={1.5}
+                          max={120}
+                          step={0.5}
+                          value={step.waitOverride ?? stepWaitSeconds}
+                          onChange={(e) => {
+                            const v = parseFloat(e.target.value);
+                            if (!isNaN(v)) {
+                              const clamped = Math.max(1.5, v);
+                              updateStep(step.id, { waitOverride: clamped } as Partial<FlowStep>);
+                            }
+                          }}
+                          className="w-8 h-4 px-0.5 text-[10px] font-mono text-center bg-ds-bg border border-ds-border rounded focus:outline-none focus:border-ds-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none text-ds-text-muted"
+                          title="Wait time for this step (seconds)"
+                        />
+                        <span className="text-[9px] text-ds-text-dim">s</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {isCurrentlyRunning && (
-                  <StepCountdown stepWaitSeconds={step.type === 'WAIT' ? (step as { seconds: number }).seconds : stepWaitSeconds} />
+                  <StepCountdown stepWaitSeconds={step.type === 'WAIT' ? (step as { seconds: number }).seconds : Math.max(1.5327, step.waitOverride ?? stepWaitSeconds)} />
                 )}
                 <div className={cn("flex items-center gap-0.5 transition-opacity shrink-0", isCurrentlyRunning ? 'opacity-0' : 'opacity-0 group-hover:opacity-100')}>
                   {isSnap && (

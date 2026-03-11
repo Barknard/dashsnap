@@ -159,7 +159,7 @@ export interface FlowVariable {
   defaultValue: string;
 }
 
-export type FlowStep = (ClickStep | WaitStep | SnapStep | NavigateStep | ScrollStep | HoverStep | SelectStep | TypeStep | ScrollElementStep | SearchSelectStep | FilterStep | MacroStep) & { group?: string };
+export type FlowStep = (ClickStep | WaitStep | SnapStep | NavigateStep | ScrollStep | HoverStep | SelectStep | TypeStep | ScrollElementStep | SearchSelectStep | FilterStep | MacroStep) & { group?: string; waitOverride?: number };
 
 // ─── Flow ─────────────────────────────────────────────────────────────────────
 
