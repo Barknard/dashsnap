@@ -919,7 +919,7 @@ const MACRO_OVERLAY_JS = `
   }
 
   function onClick(e) {
-    e.stopPropagation(); // Don't let page handlers interfere, but don't preventDefault
+    // Record the click but let it pass through to the page
     recordClickAction(e.target, 'click');
   }
 
