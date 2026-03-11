@@ -262,7 +262,7 @@ export default function App() {
             step = {
               type: 'TYPE',
               id: generateId('step'),
-              label: `Type in: ${action.label || 'input'}`,
+              label: action.value ? `Type: "${action.value.substring(0, 30)}"` : `Type in: ${action.label || 'input'}`,
               selector: action.selector || '',
               selectorStrategy,
               fallbackXY: action.fallbackXY,
@@ -318,6 +318,19 @@ export default function App() {
               group: groupId,
             } as FlowStep;
             break;
+          case 'key':
+            // Key press (Enter, Tab, etc.) — replay as a CLICK step that sends the key
+            step = {
+              type: 'CLICK',
+              id: generateId('step'),
+              label: action.label || `Press ${(action as any).key || 'Enter'}`,
+              selector: action.selector || '',
+              selectorStrategy,
+              fallbackXY: action.fallbackXY,
+              keyPress: (action as any).key || 'Enter',
+              group: groupId,
+            } as FlowStep;
+            break;
           default:
             continue;
         }
@@ -344,6 +357,7 @@ export default function App() {
       recorder.offRegionSelected(handleRegionSelected as (...args: unknown[]) => void);
       recorder.offFilterRecorded(handleFilterRecorded as (...args: unknown[]) => void);
       recorder.offMacroRecorded(handleMacroRecorded as (...args: unknown[]) => void);
+      recorder.offCancelled(handleCancelled as (...args: unknown[]) => void);
     };
   }, [addStep, stopRecording, setActiveTab]);
 

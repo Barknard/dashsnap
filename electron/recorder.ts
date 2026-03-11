@@ -497,7 +497,7 @@ const MACRO_OVERLAY_JS = `
   // Crosshair cursor during recording
   const macroStyle = document.createElement('style');
   macroStyle.id = '__dashsnap_macro_style';
-  macroStyle.textContent = '.__dashsnap_macro_recording, .__dashsnap_macro_recording * { cursor: crosshair !important; }';
+  macroStyle.textContent = '.__dashsnap_macro_recording, .__dashsnap_macro_recording * { cursor: crosshair !important; } #__ds_done_btn { transition: all 0.15s ease; } #__ds_done_btn:hover { background: #6A4CE0 !important; transform: scale(1.05); box-shadow: 0 2px 8px rgba(124,92,252,0.4); }';
   document.head.appendChild(macroStyle);
   document.documentElement.classList.add('__dashsnap_macro_recording');
 
@@ -567,6 +567,8 @@ const MACRO_OVERLAY_JS = `
     return false;
   }
 
+  // No longer needed — text is captured via the prompt dialog
+
   // Banner — pointer-events:auto so Done button is clickable
   const banner = document.createElement('div');
   banner.id = '__dashsnap_macro_banner';
@@ -626,7 +628,7 @@ const MACRO_OVERLAY_JS = `
     tooltip.style.top = (e.clientY - 35) + 'px';
   }
 
-  // Scroll tracking (debounced)
+  // Scroll tracking (debounced — only records after scrolling stops)
   let scrollTimer = null;
   let lastScrollX = window.scrollX;
   let lastScrollY = window.scrollY;
@@ -635,10 +637,10 @@ const MACRO_OVERLAY_JS = `
     const target = e.target;
     scrollTimer = setTimeout(() => {
       if (target === document || target === window || target === document.documentElement) {
-        // Page scroll
+        // Page scroll — only record if moved significantly (>20px)
         const newX = window.scrollX;
         const newY = window.scrollY;
-        if (newX !== lastScrollX || newY !== lastScrollY) {
+        if (Math.abs(newX - lastScrollX) > 20 || Math.abs(newY - lastScrollY) > 20) {
           window.__dashsnap_macro_actions.push({
             action: 'scroll',
             label: 'Page scroll to (' + Math.round(newX) + ', ' + Math.round(newY) + ')',
@@ -662,12 +664,159 @@ const MACRO_OVERLAY_JS = `
         });
         updateBanner();
       }
-    }, 400);
+    }, 1000);
+  }
+
+  // Inline text prompt — replaces the banner with a text input when user clicks a typeable element
+  var promptOverlay = null;
+  function showTextPrompt(targetEl, actionObj) {
+    // Temporarily hide the main recording UI
+    banner.style.display = 'none';
+    highlight.style.display = 'none';
+    tooltip.style.display = 'none';
+
+    var placeholder = '';
+    if (targetEl.placeholder) placeholder = targetEl.placeholder;
+    else if (targetEl.getAttribute('aria-label')) placeholder = targetEl.getAttribute('aria-label');
+    else placeholder = 'Enter text to type...';
+
+    // Inject hover styles
+    var promptStyle = document.createElement('style');
+    promptStyle.id = '__dashsnap_prompt_style';
+    promptStyle.textContent = '#__ds_prompt_ok:hover { background: #6A4CE0 !important; transform: scale(1.03); } #__ds_prompt_cancel:hover { background: #444 !important; color: #eee !important; transform: scale(1.03); } #__ds_prompt_ok, #__ds_prompt_cancel { transition: all 0.15s ease; } #__ds_text_input:focus { border-color: #7C5CFC !important; box-shadow: 0 0 0 2px rgba(124,92,252,0.25); }';
+    document.head.appendChild(promptStyle);
+
+    promptOverlay = document.createElement('div');
+    promptOverlay.id = '__dashsnap_text_prompt';
+    promptOverlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483647;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;';
+    promptOverlay.innerHTML = '<div style="background:#1C1A29;border:2px solid #7C5CFC;border-radius:12px;padding:20px 24px;min-width:380px;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:system-ui,sans-serif;">'
+      + '<div style="color:#EEEDF5;font-size:14px;font-weight:600;margin-bottom:4px;">Type text into: <span style="color:#7C5CFC;">' + (actionObj.label || 'input').substring(0, 40) + '</span></div>'
+      + '<div style="color:#888;font-size:11px;margin-bottom:12px;">Use <code style="background:#333;padding:1px 4px;border-radius:3px;">{{variable}}</code> for dynamic values</div>'
+      + '<input id="__ds_text_input" type="text" placeholder="' + placeholder.replace(/"/g, '&quot;') + '" style="width:100%;box-sizing:border-box;background:#13111C;border:1px solid #444;color:#EEEDF5;font-size:14px;padding:10px 12px;border-radius:8px;outline:none;margin-bottom:12px;" autofocus />'
+      + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">'
+      + '  <label style="color:#EEEDF5;font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;">'
+      + '    <input id="__ds_press_enter" type="checkbox" checked style="accent-color:#7C5CFC;width:16px;height:16px;" />'
+      + '    Press Enter after typing'
+      + '  </label>'
+      + '</div>'
+      + '<div style="display:flex;gap:8px;justify-content:flex-end;">'
+      + '  <button id="__ds_prompt_cancel" style="background:#333;color:#aaa;border:none;padding:8px 16px;border-radius:6px;font:13px system-ui;cursor:pointer;">Skip</button>'
+      + '  <button id="__ds_prompt_ok" style="background:#7C5CFC;color:white;border:none;padding:8px 20px;border-radius:6px;font:bold 13px system-ui;cursor:pointer;">Record</button>'
+      + '</div>'
+      + '</div>';
+    document.body.appendChild(promptOverlay);
+
+    var input = document.getElementById('__ds_text_input');
+    var enterCheckbox = document.getElementById('__ds_press_enter');
+    input.focus();
+
+    function finish(confirmed) {
+      var textVal = input.value || '';
+      var pressEnter = enterCheckbox.checked;
+      promptOverlay.remove();
+      promptOverlay = null;
+      if (promptStyle.parentNode) promptStyle.remove();
+      banner.style.display = 'flex';
+
+      if (confirmed && textVal) {
+        actionObj.value = textVal;
+        actionObj.label = 'Type: "' + textVal.substring(0, 30) + '"';
+        window.__dashsnap_macro_actions.push(actionObj);
+        if (pressEnter) {
+          window.__dashsnap_macro_actions.push({
+            action: 'key',
+            key: 'Enter',
+            selector: actionObj.selector,
+            selectorStrategy: actionObj.selectorStrategy,
+            fallbackXY: actionObj.fallbackXY,
+            label: 'Press Enter',
+          });
+        }
+
+        // Actually type the text into the page element so the user can continue recording
+        setTimeout(function() {
+          // Re-focus the target element (or find it by selector)
+          var pageEl = targetEl;
+          if (actionObj.selector) {
+            var found = document.querySelector(actionObj.selector);
+            if (found) pageEl = found;
+          }
+          // Also check if activeElement changed (e.g. Google swaps input→textarea)
+          if (document.activeElement && isTypeable(document.activeElement)) {
+            pageEl = document.activeElement;
+          }
+          pageEl.focus();
+          pageEl.click();
+
+          setTimeout(function() {
+            // Check again after focus in case element swapped
+            var actualEl = document.activeElement && isTypeable(document.activeElement) ? document.activeElement : pageEl;
+            // Clear and set value
+            if (actualEl.contentEditable === 'true') {
+              actualEl.textContent = textVal;
+            } else {
+              actualEl.value = '';
+              actualEl.value = textVal;
+            }
+            // Fire input event so the page reacts (autocomplete, validation, etc.)
+            actualEl.dispatchEvent(new Event('input', { bubbles: true }));
+            actualEl.dispatchEvent(new Event('change', { bubbles: true }));
+
+            if (pressEnter) {
+              setTimeout(function() {
+                // Submit via Enter keypress
+                actualEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true }));
+                actualEl.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+                // Also try form submit as fallback
+                var form = actualEl.closest('form');
+                if (form) {
+                  try { form.requestSubmit(); } catch(e) { form.submit(); }
+                }
+              }, 200);
+            }
+          }, 300);
+        }, 100);
+
+      } else if (confirmed) {
+        actionObj.action = 'click';
+        actionObj.label = 'Click: ' + (actionObj.label || 'input');
+        window.__dashsnap_macro_actions.push(actionObj);
+      }
+      updateBanner();
+    }
+
+    document.getElementById('__ds_prompt_ok').addEventListener('click', function(ev) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      finish(true);
+    });
+    document.getElementById('__ds_prompt_cancel').addEventListener('click', function(ev) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      finish(false);
+    });
+    input.addEventListener('keydown', function(ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        finish(true);
+      }
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        finish(false);
+      }
+    });
+    // Block all events from reaching the page while prompt is open
+    promptOverlay.addEventListener('click', function(ev) { ev.stopImmediatePropagation(); }, true);
+    promptOverlay.addEventListener('mousedown', function(ev) { ev.stopImmediatePropagation(); }, true);
   }
 
   function onClick(e) {
     const el = e.target;
     if (!el || el === highlight) return;
+    // Ignore clicks while text prompt is open
+    if (promptOverlay) return;
     // Done button or banner click = finish recording
     if (el.id === '__ds_done_btn' || el === banner || el.closest('#__dashsnap_macro_banner')) {
       e.preventDefault();
@@ -690,7 +839,7 @@ const MACRO_OVERLAY_JS = `
     const meta = getElementMeta(el);
     const actionType = isTypeable(el) ? 'type' : (el.tagName === 'SELECT' ? 'select' : 'click');
 
-    window.__dashsnap_macro_actions.push({
+    var actionObj = {
       selector: selector,
       selectorStrategy: strategy,
       fallbackXY: [Math.round(rect.left + rect.width/2), Math.round(rect.top + rect.height/2)],
@@ -698,10 +847,39 @@ const MACRO_OVERLAY_JS = `
       action: actionType,
       value: '',
       elementMeta: meta,
-    });
+    };
 
+    // If typeable, show a prompt for the user to enter the text value
+    if (actionType === 'type') {
+      flashElement(el);
+      // Show inline text prompt
+      showTextPrompt(el, actionObj);
+      return; // Don't push yet — the prompt callback will push it
+    }
+
+    window.__dashsnap_macro_actions.push(actionObj);
     flashElement(el);
     updateBanner();
+  }
+
+  // Capture select/dropdown changes
+  function onSelectChange(e) {
+    var el = e.target;
+    if (!el || el.tagName !== 'SELECT') return;
+    // Find the last action for this element and update its value
+    var actions = window.__dashsnap_macro_actions;
+    for (var i = actions.length - 1; i >= 0; i--) {
+      if (actions[i].action === 'select' && actions[i].selector) {
+        var match = document.querySelector(actions[i].selector);
+        if (match === el) {
+          actions[i].value = el.value;
+          var selectedText = el.options[el.selectedIndex] ? el.options[el.selectedIndex].textContent.trim() : el.value;
+          actions[i].label = 'Select: ' + selectedText;
+          updateBanner();
+          break;
+        }
+      }
+    }
   }
 
   function onKeyDown(e) {
@@ -775,7 +953,13 @@ const MACRO_OVERLAY_JS = `
         return;
       }
     }
-    if (e.key === 'Enter' && (e.target === document.body || e.target === document.documentElement)) {
+    // Enter key — finish recording (unless prompt is open or focus is in a page input)
+    if (e.key === 'Enter') {
+      if (promptOverlay) return; // Prompt handles its own Enter
+      var active = document.activeElement;
+      var isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.contentEditable === 'true');
+      if (isInput) return; // Let Enter go through to the page normally
+      // Enter on body = finish recording
       e.preventDefault();
       e.stopImmediatePropagation();
       if (window.__dashsnap_macro_actions.length > 0) {
@@ -792,14 +976,17 @@ const MACRO_OVERLAY_JS = `
   document.addEventListener('mousemove', onMouseMove, true);
   document.addEventListener('click', onClick, true);
   document.addEventListener('keydown', onKeyDown, true);
+  document.addEventListener('change', onSelectChange, true);
   document.addEventListener('scroll', onScroll, true);
   window.addEventListener('scroll', onScroll, true);
 
   function cleanup() {
+    if (promptOverlay) { promptOverlay.remove(); promptOverlay = null; }
     clearTimeout(scrollTimer);
     document.removeEventListener('mousemove', onMouseMove, true);
     document.removeEventListener('click', onClick, true);
     document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('change', onSelectChange, true);
     document.removeEventListener('scroll', onScroll, true);
     window.removeEventListener('scroll', onScroll, true);
     banner.remove();
@@ -820,6 +1007,8 @@ export class Recorder {
   private pollInterval: ReturnType<typeof setInterval> | null = null;
   private _macroNavHandler: (() => void) | null = null;
   private _macroStartUrl: string = '';
+  private _macroAccumulatedActions: unknown[] = [];  // Actions preserved across navigations
+  private _lastSyncedCount: number = 0;
 
   constructor(view: BrowserView, window: BrowserWindow) {
     this.view = view;
@@ -873,12 +1062,25 @@ export class Recorder {
   async startMacroRecording() {
     this.stopPolling();
     this._macroStartUrl = this.view.webContents.getURL();
+    this._macroAccumulatedActions = [];
+    this._lastSyncedCount = 0;
     await this.view.webContents.executeJavaScript(MACRO_OVERLAY_JS);
-    // Re-inject overlay after page navigation so highlight persists
     this._macroNavHandler = () => {
+      // Re-inject overlay on new page after navigation completes
       setTimeout(() => {
         this.view.webContents.executeJavaScript(MACRO_OVERLAY_JS).catch(() => {});
-      }, 500);
+        // Restore accumulated actions into the new page's overlay (REPLACE, don't concat — avoids duplicates)
+        if (this._macroAccumulatedActions.length > 0) {
+          const serialized = JSON.stringify(this._macroAccumulatedActions);
+          setTimeout(() => {
+            this.view.webContents.executeJavaScript(`
+              if (window.__dashsnap_macro_actions !== undefined) {
+                window.__dashsnap_macro_actions = ${serialized};
+              }
+            `).catch(() => {});
+          }, 300);
+        }
+      }, 800);
     };
     this.view.webContents.on('did-navigate', this._macroNavHandler);
     this.view.webContents.on('did-navigate-in-page', this._macroNavHandler);
@@ -1012,20 +1214,38 @@ export class Recorder {
         );
         if (done) {
           this.stopPolling();
-          const actions = await this.view.webContents.executeJavaScript(
+          // Read final actions from the page (most complete snapshot)
+          const finalPageActions = await this.view.webContents.executeJavaScript(
             'JSON.parse(JSON.stringify(window.__dashsnap_macro_actions))'
-          );
+          ).catch(() => []);
+          // Use whichever has more actions: the final page read or our accumulated copy
+          const allActions = (finalPageActions && finalPageActions.length >= this._macroAccumulatedActions.length)
+            ? finalPageActions
+            : this._macroAccumulatedActions;
+          this._macroAccumulatedActions = [];
           const startUrl = this._macroStartUrl || this.view.webContents.getURL();
           await this.view.webContents.executeJavaScript(`
             window.__dashsnap_macro_done = false;
             window.__dashsnap_macro_actions = [];
-          `);
-          this.window.webContents.send('recorder:macro-recorded', actions, startUrl);
+          `).catch(() => {});
+          this.window.webContents.send('recorder:macro-recorded', allActions, startUrl);
+          return;
+        }
+
+        // Continuously sync actions from the page to main process
+        // This ensures actions are preserved even if will-navigate doesn't fire in time
+        const currentActions = await this.view.webContents.executeJavaScript(
+          'window.__dashsnap_macro_actions ? JSON.parse(JSON.stringify(window.__dashsnap_macro_actions)) : null'
+        );
+        if (currentActions && currentActions.length > 0) {
+          // Always keep the freshest snapshot of ALL actions (accumulated + current page)
+          this._macroAccumulatedActions = currentActions;
+          this._lastSyncedCount = currentActions.length;
         }
       } catch {
-        // Page may have navigated
+        // Page may have navigated — accumulated actions are safe in main process
       }
-    }, 100);
+    }, 200);
   }
 
   private stopPolling() {
@@ -1038,5 +1258,7 @@ export class Recorder {
       this.view.webContents.removeListener('did-navigate-in-page', this._macroNavHandler);
       this._macroNavHandler = null;
     }
+    this._macroAccumulatedActions = [];
+    this._lastSyncedCount = 0;
   }
 }

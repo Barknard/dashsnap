@@ -9,6 +9,7 @@ export interface ClickStep {
   selector: string;
   fallbackXY?: [number, number];
   selectorStrategy: 'data-attr' | 'aria-label' | 'text' | 'css-combo' | 'xy-position';
+  keyPress?: string;          // optional key to send instead of click (e.g. 'Enter', 'Tab')
 }
 
 export interface WaitStep {
@@ -122,7 +123,8 @@ export interface MacroAction {
   fallbackXY?: [number, number];
   selectorStrategy?: string;
   label?: string;
-  action: 'click' | 'type' | 'select' | 'scroll' | 'snap';
+  action: 'click' | 'type' | 'select' | 'scroll' | 'snap' | 'key';
+  key?: string;              // for key actions — e.g. 'Enter', 'Tab'
   value?: string;            // for type/select — supports {{variable}}
   scrollTarget?: {           // for scroll actions
     x: number;

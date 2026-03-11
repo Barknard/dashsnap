@@ -159,6 +159,10 @@ export const recorder = {
     if (!isElectron) return;
     window.dashsnap!.on('recorder:cancelled', cb as (...args: unknown[]) => void);
   },
+  offCancelled: (cb: (...args: unknown[]) => void) => {
+    if (!isElectron) return;
+    window.dashsnap!.off('recorder:cancelled', cb);
+  },
 };
 
 // ─── Flow Management ────────────────────────────────────────────────────────
