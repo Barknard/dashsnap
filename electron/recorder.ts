@@ -502,8 +502,10 @@ const FILTER_OVERLAY_JS = `
 
 // ─── Macro recording overlay ─────────────────────────────────────────────────
 // Free-form interaction recorder: clicks go through, scrolls are captured,
-// each interaction is recorded in sequence with element metadata for
-// variable detection. Banner shows action count and controls.
+// Intercept-then-replay recorder: a transparent overlay catches every click,
+// records the element underneath via elementFromPoint, then programmatically
+// replays the full event sequence to the real element. No event listener
+// conflicts, no dedup needed — one interception = one action, guaranteed.
 const MACRO_OVERLAY_JS = `
 (function() {
   if (window.__dashsnap_macro_active) return;
@@ -512,34 +514,26 @@ const MACRO_OVERLAY_JS = `
   window.__dashsnap_macro_cancelled = false;
   window.__dashsnap_macro_actions = [];
 
-  // Crosshair cursor during recording
   const macroStyle = document.createElement('style');
   macroStyle.id = '__dashsnap_macro_style';
-  macroStyle.textContent = '.__dashsnap_macro_recording, .__dashsnap_macro_recording * { cursor: crosshair !important; } #__ds_done_btn { transition: all 0.15s ease; } #__ds_done_btn:hover { background: #6A4CE0 !important; transform: scale(1.05); box-shadow: 0 2px 8px rgba(124,92,252,0.4); }';
+  macroStyle.textContent = '#__ds_done_btn { transition: all 0.15s ease; } #__ds_done_btn:hover { background: #6A4CE0 !important; transform: scale(1.05); box-shadow: 0 2px 8px rgba(124,92,252,0.4); }';
   document.head.appendChild(macroStyle);
-  document.documentElement.classList.add('__dashsnap_macro_recording');
 
+  ${/* Shared utilities — getBestSelector, getLabel, getElementMeta, isTypeable */''}
   const getBestSelector = (function() {
-    // Session-specific data attributes that change every page load — skip these
     const UNSTABLE = new Set(['data-ved', 'data-csiid', 'data-ei', 'data-jsarwt', 'data-usg',
       'data-lpage', 'data-atf', 'data-frt', 'data-ictx', 'data-surl', 'data-docid', 'data-deferred',
       'data-ri', 'data-tbnid', 'data-cb', 'data-nhd', 'data-lhid', 'data-ctbid', 'data-reactid']);
-
-    // Safely escape a value for use inside a CSS attribute selector: [attr="value"]
-    function cssEscapeVal(v) { return v.replace(/"/g, '\\"'); }
-
+    function cssEscapeVal(v) { return v.replace(/"/g, '\\\\"'); }
     function unique(sel) {
       try { return document.querySelectorAll(sel).length === 1; } catch(e) { return false; }
     }
-
     return function getBestSelector(el) {
-      // 0. aria-label — most stable across sessions
       var ariaLabel = el.getAttribute('aria-label');
       if (ariaLabel) {
         var sel = '[aria-label="' + cssEscapeVal(ariaLabel) + '"]';
         if (unique(sel)) return { selector: sel, strategy: 'aria-label' };
       }
-      // 1. Stable data attributes (skip session-specific ones)
       for (var i = 0; i < el.attributes.length; i++) {
         var attr = el.attributes[i];
         if (attr.name.startsWith('data-') && !UNSTABLE.has(attr.name)) {
@@ -549,18 +543,15 @@ const MACRO_OVERLAY_JS = `
           }
         }
       }
-      // 2. ID (skip session-generated IDs)
       if (el.id && !/^[:_]/.test(el.id) && el.id.length < 50) {
         var sel = '#' + CSS.escape(el.id);
         if (unique(sel)) return { selector: sel, strategy: 'id' };
       }
-      // 3. name attribute (very stable for form elements)
       var nameAttr = el.getAttribute('name');
       if (nameAttr) {
         var sel = el.tagName.toLowerCase() + '[name="' + cssEscapeVal(nameAttr) + '"]';
         if (unique(sel)) return { selector: sel, strategy: 'name' };
       }
-      // 4. role + text content
       var text = (el.textContent || '').trim();
       if (text && text.length < 50) {
         var role = el.getAttribute('role');
@@ -569,10 +560,8 @@ const MACRO_OVERLAY_JS = `
           var matches = [].slice.call(document.querySelectorAll(sel)).filter(function(e) { return (e.textContent||'').trim() === text; });
           if (matches.length === 1) return { selector: sel, strategy: 'role-text' };
         }
-        // 5. Links/buttons: use tag + text content as CSS-only approach
         var tag = el.tagName.toLowerCase();
         if (tag === 'a' || tag === 'button') {
-          // Try href for links first — more reliable than text matching
           if (tag === 'a' && el.getAttribute('href')) {
             var href = el.getAttribute('href');
             if (href.length < 200) {
@@ -580,14 +569,12 @@ const MACRO_OVERLAY_JS = `
               if (unique(sel)) return { selector: sel, strategy: 'href' };
             }
           }
-          // Use xpath for text match — most reliable way to match by text
           var sameTag = [].slice.call(document.querySelectorAll(tag)).filter(function(e) { return (e.textContent||'').trim() === text; });
           if (sameTag.length === 1) {
-            return { selector: 'xpath://' + tag + '[normalize-space(.)="' + text.replace(/"/g, '\\"') + '"]', strategy: 'text-match' };
+            return { selector: 'xpath://' + tag + '[normalize-space(.)="' + text.replace(/"/g, '\\\\"') + '"]', strategy: 'text-match' };
           }
         }
       }
-      // 6. href for links (if text match didn't work above)
       if (el.tagName === 'A' && el.getAttribute('href')) {
         var href = el.getAttribute('href');
         if (href.length < 200) {
@@ -595,7 +582,6 @@ const MACRO_OVERLAY_JS = `
           if (unique(sel)) return { selector: sel, strategy: 'href' };
         }
       }
-      // 7. CSS class combo
       if (el.className && typeof el.className === 'string') {
         var classes = el.className.split(/\\s+/).filter(function(c) { return c && !c.startsWith('__'); }).slice(0, 2);
         if (classes.length > 0) {
@@ -608,92 +594,106 @@ const MACRO_OVERLAY_JS = `
   })();
 
   function getLabel(el) {
-    const ariaLabel = el.getAttribute('aria-label');
+    var ariaLabel = el.getAttribute('aria-label');
     if (ariaLabel) return ariaLabel;
-    const text = (el.textContent || '').trim().substring(0, 30);
+    var text = (el.textContent || '').trim().substring(0, 30);
     return text || el.tagName.toLowerCase();
   }
 
   function getElementMeta(el) {
-    const meta = { tagName: el.tagName.toLowerCase() };
+    var meta = { tagName: el.tagName.toLowerCase() };
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
       meta.inputType = el.type || 'text';
       if (el.placeholder) meta.placeholder = el.placeholder;
     }
     if (el.tagName === 'SELECT') {
-      meta.options = [...el.options].map(o => o.textContent.trim()).slice(0, 20);
+      meta.options = [].slice.call(el.options).map(function(o) { return o.textContent.trim(); }).slice(0, 20);
     }
     return meta;
   }
 
   function isTypeable(el) {
-    const tag = el.tagName;
+    var tag = el.tagName;
     if (tag === 'TEXTAREA') return true;
     if (tag === 'INPUT') {
-      const t = (el.type || 'text').toLowerCase();
-      return ['text','search','email','tel','url','number','password'].includes(t);
+      var t = (el.type || 'text').toLowerCase();
+      return ['text','search','email','tel','url','number','password'].indexOf(t) >= 0;
     }
     if (el.contentEditable === 'true') return true;
     return false;
   }
 
-  // No longer needed — text is captured via the prompt dialog
-
-  // Banner — pointer-events:auto so Done button is clickable
-  const banner = document.createElement('div');
+  // --- UI elements ---
+  var banner = document.createElement('div');
   banner.id = '__dashsnap_macro_banner';
   banner.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:13px system-ui;padding:10px 20px;border-radius:10px;border:2px solid #7C5CFC;pointer-events:auto;box-shadow:0 4px 20px rgba(0,0,0,0.4);display:flex;align-items:center;gap:10px;';
   document.body.appendChild(banner);
 
-  // Highlight
-  const highlight = document.createElement('div');
+  var highlight = document.createElement('div');
   highlight.id = '__dashsnap_macro_highlight';
-  highlight.style.cssText = 'position:fixed;z-index:2147483646;border:2px solid #7C5CFC;background:rgba(124,92,252,0.12);border-radius:3px;pointer-events:none;display:none;transition:all 0.05s ease;';
+  highlight.style.cssText = 'position:fixed;z-index:2147483645;border:2px solid #7C5CFC;background:rgba(124,92,252,0.12);border-radius:3px;pointer-events:none;display:none;transition:all 0.05s ease;';
   document.body.appendChild(highlight);
 
+  var tooltip = document.createElement('div');
+  tooltip.id = '__dashsnap_macro_tooltip';
+  tooltip.style.cssText = 'position:fixed;z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:12px system-ui;padding:6px 10px;border-radius:6px;border:1px solid #7C5CFC;pointer-events:none;display:none;max-width:250px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+  document.body.appendChild(tooltip);
+
+  // Full-screen transparent click interceptor — catches ALL clicks reliably
+  var clickShield = document.createElement('div');
+  clickShield.id = '__dashsnap_click_shield';
+  clickShield.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:2147483646;cursor:crosshair;background:transparent;';
+  document.body.appendChild(clickShield);
+
   function flashElement(el) {
-    const flash = document.createElement('div');
+    var flash = document.createElement('div');
     flash.style.cssText = 'position:fixed;z-index:2147483645;background:rgba(34,211,238,0.3);border:2px solid #22D3EE;border-radius:3px;pointer-events:none;transition:opacity 0.5s;';
-    const rect = el.getBoundingClientRect();
+    var rect = el.getBoundingClientRect();
     flash.style.left = rect.left + 'px';
     flash.style.top = rect.top + 'px';
     flash.style.width = rect.width + 'px';
     flash.style.height = rect.height + 'px';
     document.body.appendChild(flash);
-    setTimeout(() => { flash.style.opacity = '0'; }, 100);
-    setTimeout(() => flash.remove(), 600);
+    setTimeout(function() { flash.style.opacity = '0'; }, 100);
+    setTimeout(function() { flash.remove(); }, 600);
   }
 
   function updateBanner() {
-    const count = window.__dashsnap_macro_actions.length;
+    var count = window.__dashsnap_macro_actions.length;
     banner.innerHTML = '<span style="width:8px;height:8px;border-radius:50%;background:#EF4444;animation:pulse 1s infinite;display:inline-block"></span> '
       + '<span style="color:#7C5CFC;font-weight:700">REC</span> '
-      + count + ' action' + (count !== 1 ? 's' : '') + ' · '
-      + '<span style="font-size:10px;color:#aaa"><kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">S</kbd> snap element · <kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">R</kbd> snap region</span> · '
+      + count + ' action' + (count !== 1 ? 's' : '') + ' \\u00b7 '
+      + '<span style="font-size:10px;color:#aaa"><kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">S</kbd> snap element \\u00b7 <kbd style="background:#333;padding:1px 5px;border-radius:3px;font-size:10px">R</kbd> snap region</span> \\u00b7 '
       + '<button id="__ds_done_btn" style="background:#7C5CFC;color:white;border:none;padding:5px 16px;border-radius:6px;font:bold 12px system-ui;cursor:pointer;">Done</button>';
   }
   updateBanner();
 
-  // Tooltip for hovered element
-  const tooltip = document.createElement('div');
-  tooltip.id = '__dashsnap_macro_tooltip';
-  tooltip.style.cssText = 'position:fixed;z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:12px system-ui;padding:6px 10px;border-radius:6px;border:1px solid #7C5CFC;pointer-events:none;display:none;max-width:250px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
-  document.body.appendChild(tooltip);
+  // --- Hover tracking (on the shield, resolve element underneath) ---
+  var lastEl = null;
+  var lastClientX = 0, lastClientY = 0;
 
-  let lastEl = null;
-  function onMouseMove(e) {
-    var rawEl = e.target;
-    if (!rawEl || rawEl === banner || rawEl === highlight || rawEl === tooltip || (rawEl.closest && rawEl.closest('#__dashsnap_macro_banner'))) {
-      // Hide highlight and tooltip when over the banner/overlay elements
+  clickShield.addEventListener('mousemove', function(e) {
+    lastClientX = e.clientX;
+    lastClientY = e.clientY;
+    // Temporarily hide shield to find the real element underneath
+    clickShield.style.pointerEvents = 'none';
+    highlight.style.display = 'none';
+    var el = document.elementFromPoint(e.clientX, e.clientY);
+    clickShield.style.pointerEvents = 'auto';
+    if (!el || el === banner || el === highlight || el === tooltip || (el.closest && el.closest('#__dashsnap_macro_banner'))) {
       highlight.style.display = 'none';
       tooltip.style.display = 'none';
       lastEl = null;
       return;
     }
-    const el = rawEl;
-    if (el === lastEl) return;
+    if (el === lastEl) {
+      // Still update tooltip position even if same element
+      tooltip.style.left = Math.min(e.clientX + 12, window.innerWidth - 260) + 'px';
+      tooltip.style.top = (e.clientY - 35) + 'px';
+      return;
+    }
     lastEl = el;
-    const rect = el.getBoundingClientRect();
+    var rect = el.getBoundingClientRect();
     highlight.style.display = 'block';
     highlight.style.left = rect.left + 'px';
     highlight.style.top = rect.top + 'px';
@@ -703,20 +703,89 @@ const MACRO_OVERLAY_JS = `
     tooltip.style.display = 'block';
     tooltip.style.left = Math.min(e.clientX + 12, window.innerWidth - 260) + 'px';
     tooltip.style.top = (e.clientY - 35) + 'px';
-  }
+  });
 
-  // Scroll tracking (debounced — only records after scrolling stops)
-  let scrollTimer = null;
-  let lastScrollX = window.scrollX;
-  let lastScrollY = window.scrollY;
+  // --- Click interception: record element, then replay click to real element ---
+  clickShield.addEventListener('mousedown', function(e) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Resolve the real element under the click
+    clickShield.style.pointerEvents = 'none';
+    highlight.style.display = 'none';
+    var el = document.elementFromPoint(e.clientX, e.clientY);
+    clickShield.style.pointerEvents = 'auto';
+
+    if (!el) return;
+
+    // Done button click
+    if (el.id === '__ds_done_btn' || el === banner || (el.closest && el.closest('#__dashsnap_macro_banner'))) {
+      if (window.__dashsnap_macro_actions.length > 0) {
+        window.__dashsnap_macro_done = true;
+        cleanup();
+      } else {
+        banner.style.borderColor = '#EF4444';
+        banner.style.transition = 'border-color 0.3s';
+        setTimeout(function() { banner.style.borderColor = '#7C5CFC'; }, 800);
+      }
+      return;
+    }
+
+    if (promptOverlay) return;
+
+    // Record the element
+    var rect = el.getBoundingClientRect();
+    var cx = Math.round(rect.left + rect.width/2);
+    var cy = Math.round(rect.top + rect.height/2);
+    var info = getBestSelector(el);
+    var label = getLabel(el);
+    var meta = getElementMeta(el);
+    var actionType = isTypeable(el) ? 'type' : (el.tagName === 'SELECT' ? 'select' : 'click');
+
+    var actionObj = {
+      selector: info.selector,
+      selectorStrategy: info.strategy,
+      fallbackXY: [cx, cy],
+      label: label,
+      action: actionType,
+      value: '',
+      elementMeta: meta,
+    };
+
+    if (actionType === 'type') {
+      flashElement(el);
+      showTextPrompt(el, actionObj);
+      return;
+    }
+
+    window.__dashsnap_macro_actions.push(actionObj);
+    console.log('__DASHSNAP_ACTION__' + JSON.stringify(actionObj));
+    flashElement(el);
+    updateBanner();
+
+    // Replay the full event sequence to the real element
+    var evtOpts = { bubbles: true, cancelable: true, view: window, clientX: e.clientX, clientY: e.clientY, button: 0 };
+    el.dispatchEvent(new PointerEvent('pointerdown', evtOpts));
+    el.dispatchEvent(new MouseEvent('mousedown', evtOpts));
+    el.dispatchEvent(new PointerEvent('pointerup', evtOpts));
+    el.dispatchEvent(new MouseEvent('mouseup', evtOpts));
+    el.click();
+    // Focus the element if it's focusable (inputs, buttons, links)
+    if (el.focus) try { el.focus(); } catch(ex) {}
+  });
+
+  // --- Scroll tracking ---
+  var scrollTimer = null;
+  var lastScrollX = window.scrollX;
+  var lastScrollY = window.scrollY;
   function onScroll(e) {
     clearTimeout(scrollTimer);
-    const target = e.target;
-    scrollTimer = setTimeout(() => {
+    var target = e.target;
+    scrollTimer = setTimeout(function() {
       if (target === document || target === window || target === document.documentElement) {
-        // Page scroll — only record if moved significantly (>20px)
-        const newX = window.scrollX;
-        const newY = window.scrollY;
+        var newX = window.scrollX;
+        var newY = window.scrollY;
         if (Math.abs(newX - lastScrollX) > 20 || Math.abs(newY - lastScrollY) > 20) {
           var scrollAction = {
             action: 'scroll',
@@ -730,13 +799,12 @@ const MACRO_OVERLAY_JS = `
           updateBanner();
         }
       } else if (target && target.nodeType === 1) {
-        // Element scroll
-        const { selector, strategy } = getBestSelector(target);
-        const rect = target.getBoundingClientRect();
+        var sInfo = getBestSelector(target);
+        var rect = target.getBoundingClientRect();
         var elScrollAction = {
           action: 'scroll',
-          selector: selector,
-          selectorStrategy: strategy,
+          selector: sInfo.selector,
+          selectorStrategy: sInfo.strategy,
           fallbackXY: [Math.round(rect.left + rect.width/2), Math.round(rect.top + rect.height/2)],
           label: 'Scroll: ' + getLabel(target),
           scrollTarget: { x: Math.round(target.scrollLeft), y: Math.round(target.scrollTop), isPage: false },
@@ -748,20 +816,19 @@ const MACRO_OVERLAY_JS = `
     }, 1000);
   }
 
-  // Inline text prompt — replaces the banner with a text input when user clicks a typeable element
+  // --- Text prompt ---
   var promptOverlay = null;
   function showTextPrompt(targetEl, actionObj) {
-    // Temporarily hide the main recording UI
     banner.style.display = 'none';
     highlight.style.display = 'none';
     tooltip.style.display = 'none';
+    clickShield.style.display = 'none';
 
     var placeholder = '';
     if (targetEl.placeholder) placeholder = targetEl.placeholder;
     else if (targetEl.getAttribute('aria-label')) placeholder = targetEl.getAttribute('aria-label');
     else placeholder = 'Enter text to type...';
 
-    // Inject hover styles
     var promptStyle = document.createElement('style');
     promptStyle.id = '__dashsnap_prompt_style';
     promptStyle.textContent = '#__ds_prompt_ok:hover { background: #6A4CE0 !important; transform: scale(1.03); } #__ds_prompt_cancel:hover { background: #444 !important; color: #eee !important; transform: scale(1.03); } #__ds_prompt_ok, #__ds_prompt_cancel { transition: all 0.15s ease; } #__ds_text_input:focus { border-color: #7C5CFC !important; box-shadow: 0 0 0 2px rgba(124,92,252,0.25); }';
@@ -790,12 +857,12 @@ const MACRO_OVERLAY_JS = `
       promptOverlay = null;
       if (promptStyle.parentNode) promptStyle.remove();
       banner.style.display = 'flex';
+      clickShield.style.display = 'block';
 
       if (confirmed && textVal) {
         actionObj.value = textVal;
         actionObj.label = 'Type: "' + textVal.substring(0, 30) + '"';
         window.__dashsnap_macro_actions.push(actionObj);
-        // Always record Enter after typing
         window.__dashsnap_macro_actions.push({
           action: 'key',
           key: 'Enter',
@@ -804,15 +871,11 @@ const MACRO_OVERLAY_JS = `
           fallbackXY: actionObj.fallbackXY,
           label: 'Press Enter',
         });
-
-        // Signal the main process to type text + press Enter using trusted input events
-        // Store the pending action so the polling loop can pick it up
         window.__dashsnap_macro_pending_type = {
           selector: actionObj.selector,
           text: textVal,
           pressEnter: true,
         };
-
       } else if (confirmed) {
         actionObj.action = 'click';
         actionObj.label = 'Click: ' + (actionObj.label || 'input');
@@ -822,153 +885,27 @@ const MACRO_OVERLAY_JS = `
     }
 
     document.getElementById('__ds_prompt_ok').addEventListener('click', function(ev) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      finish(true);
+      ev.preventDefault(); ev.stopPropagation(); finish(true);
     });
     document.getElementById('__ds_prompt_cancel').addEventListener('click', function(ev) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      finish(false);
+      ev.preventDefault(); ev.stopPropagation(); finish(false);
     });
     input.addEventListener('keydown', function(ev) {
-      ev.stopPropagation(); // Prevent overlay's onKeyDown from seeing it
-      if (ev.key === 'Enter') {
-        ev.preventDefault();
-        finish(true);
-      } else if (ev.key === 'Escape') {
-        ev.preventDefault();
-        finish(false);
-      }
+      ev.stopPropagation();
+      if (ev.key === 'Enter') { ev.preventDefault(); finish(true); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
     });
   }
 
-
-  // Dedup: track last recorded action to prevent click+mousedown double-recording
-  var lastRecordedAt = 0;
-  var lastRecordedSelector = '';
-  var lastRecordedXY = [0, 0];
-  // Track click events so mousedown fallback knows to skip
-  var lastClickAt = 0;
-  var lastClickXY = [0, 0];
-
-  function nearXY(a, b) {
-    return Math.abs(a[0] - b[0]) < 30 && Math.abs(a[1] - b[1]) < 30;
-  }
-
-  function recordClickAction(rawEl, eventType) {
-    if (!rawEl || rawEl === highlight || rawEl === tooltip) return;
-    if (promptOverlay) return;
-    if (window.__dashsnap_macro_typing) return;
-    // Done button or banner
-    if (rawEl.id === '__ds_done_btn' || rawEl === banner || (rawEl.closest && rawEl.closest('#__dashsnap_macro_banner'))) {
-      if (window.__dashsnap_macro_actions.length > 0) {
-        window.__dashsnap_macro_done = true;
-        cleanup();
-      } else {
-        banner.style.borderColor = '#EF4444';
-        banner.style.transition = 'border-color 0.3s';
-        setTimeout(function() { banner.style.borderColor = '#7C5CFC'; }, 800);
-      }
-      return;
-    }
-
-    // Use the exact clicked element — don't walk up the DOM.
-    const el = rawEl;
-    const rect = el.getBoundingClientRect();
-    var cx = Math.round(rect.left + rect.width/2);
-    var cy = Math.round(rect.top + rect.height/2);
-    var now = Date.now();
-
-    const { selector, strategy } = getBestSelector(el);
-
-    // Deduplicate: same selector or nearby position within 500ms = same click
-    if (now - lastRecordedAt < 500) {
-      if (selector && selector === lastRecordedSelector) return;
-      if (nearXY([cx, cy], lastRecordedXY)) return;
-    }
-
-    const label = getLabel(el);
-    const meta = getElementMeta(el);
-    const actionType = isTypeable(el) ? 'type' : (el.tagName === 'SELECT' ? 'select' : 'click');
-
-    var actionObj = {
-      selector: selector,
-      selectorStrategy: strategy,
-      fallbackXY: [cx, cy],
-      label: label,
-      action: actionType,
-      value: '',
-      elementMeta: meta,
-    };
-
-    if (actionType === 'type') {
-      flashElement(el);
-      showTextPrompt(el, actionObj);
-      return;
-    }
-
-    lastRecordedAt = now;
-    lastRecordedSelector = selector;
-    lastRecordedXY = [cx, cy];
-
-    window.__dashsnap_macro_actions.push(actionObj);
-    console.log('__DASHSNAP_ACTION__' + JSON.stringify(actionObj));
-    flashElement(el);
-    updateBanner();
-  }
-
-  function onClick(e) {
-    var rect = e.target.getBoundingClientRect();
-    lastClickAt = Date.now();
-    lastClickXY = [Math.round(rect.left + rect.width/2), Math.round(rect.top + rect.height/2)];
-    recordClickAction(e.target, 'click');
-  }
-
-  // Fallback: capture mousedown ONLY for elements where click never fires
-  // (e.g., custom dropdown options that suppress click events)
-  // Uses BUBBLE phase (not capture) to avoid interfering with the page's own handlers
-  function onMouseDown(e) {
-    if (e.button !== 0) return;
-    if (e.target === banner || e.target === highlight || e.target === tooltip) return;
-    if (e.target && e.target.closest && e.target.closest('#__dashsnap_macro_banner')) return;
-    if (e.target && e.target.closest && e.target.closest('#__dashsnap_text_prompt')) return;
-    var target = e.target;
-    var rect = target.getBoundingClientRect();
-    var mxy = [Math.round(rect.left + rect.width/2), Math.round(rect.top + rect.height/2)];
-    setTimeout(function() {
-      // Only record if no click event fired for this interaction
-      if (Date.now() - lastClickAt < 300 && nearXY(mxy, lastClickXY)) return;
-      recordClickAction(target, 'mousedown');
-    }, 250);
-  }
-
-  // Capture select/dropdown changes
-  function onSelectChange(e) {
-    var el = e.target;
-    if (!el || el.tagName !== 'SELECT') return;
-    // Find the last action for this element and update its value
-    var actions = window.__dashsnap_macro_actions;
-    for (var i = actions.length - 1; i >= 0; i--) {
-      if (actions[i].action === 'select' && actions[i].selector) {
-        var match = document.querySelector(actions[i].selector);
-        if (match === el) {
-          actions[i].value = el.value;
-          var selectedText = el.options[el.selectedIndex] ? el.options[el.selectedIndex].textContent.trim() : el.value;
-          actions[i].label = 'Select: ' + selectedText;
-          updateBanner();
-          break;
-        }
-      }
-    }
-  }
-
+  // --- Keyboard shortcuts ---
   function onKeyDown(e) {
-    // S key = snapshot hovered element (skip if typing in an input)
+    if (promptOverlay) return;
+
+    // S key = snapshot hovered element
     if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey && !e.altKey) {
       var active = document.activeElement;
       var isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.contentEditable === 'true');
-      if (!isInput && lastEl && lastEl !== highlight && lastEl !== tooltip && lastEl !== banner && !lastEl.closest('#__dashsnap_macro_banner')) {
+      if (!isInput && lastEl) {
         e.preventDefault();
         e.stopImmediatePropagation();
         var rect = lastEl.getBoundingClientRect();
@@ -986,18 +923,18 @@ const MACRO_OVERLAY_JS = `
         return;
       }
     }
-    // R key = snapshot drawn region (skip if typing)
+
+    // R key = snapshot drawn region
     if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey) {
       var active = document.activeElement;
       var isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.contentEditable === 'true');
       if (!isInput) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        // Temporarily hide macro overlay, show snap region drawer
         highlight.style.display = 'none';
         tooltip.style.display = 'none';
         banner.style.display = 'none';
-        // Inline region drawer
+        clickShield.style.display = 'none';
         var canvas = document.createElement('canvas');
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
@@ -1024,6 +961,7 @@ const MACRO_OVERLAY_JS = `
           var rw = Math.abs(ev.clientX - sx), rh = Math.abs(ev.clientY - sy);
           canvas.remove();
           banner.style.display = 'flex';
+          clickShield.style.display = 'block';
           if (rw >= 10 && rh >= 10) {
             var regionAction = {
               action: 'snap',
@@ -1038,13 +976,12 @@ const MACRO_OVERLAY_JS = `
         return;
       }
     }
-    // Enter key — finish recording (unless prompt is open or focus is in a page input)
+
+    // Enter = finish recording
     if (e.key === 'Enter') {
-      if (promptOverlay) return; // Prompt handles its own Enter
       var active = document.activeElement;
       var isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.contentEditable === 'true');
-      if (isInput) return; // Let Enter go through to the page normally
-      // Enter on body = finish recording
+      if (isInput) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       if (window.__dashsnap_macro_actions.length > 0) {
@@ -1058,28 +995,20 @@ const MACRO_OVERLAY_JS = `
     }
   }
 
-  document.addEventListener('mousemove', onMouseMove, true);
-  document.addEventListener('click', onClick, true);
-  document.addEventListener('mousedown', onMouseDown, false);  // bubble phase — don't interfere with page handlers
   document.addEventListener('keydown', onKeyDown, true);
-  document.addEventListener('change', onSelectChange, true);
   document.addEventListener('scroll', onScroll, true);
   window.addEventListener('scroll', onScroll, true);
 
   function cleanup() {
     if (promptOverlay) { promptOverlay.remove(); promptOverlay = null; }
     clearTimeout(scrollTimer);
-    document.removeEventListener('mousemove', onMouseMove, true);
-    document.removeEventListener('click', onClick, true);
-    document.removeEventListener('mousedown', onMouseDown, false);
     document.removeEventListener('keydown', onKeyDown, true);
-    document.removeEventListener('change', onSelectChange, true);
     document.removeEventListener('scroll', onScroll, true);
     window.removeEventListener('scroll', onScroll, true);
     banner.remove();
     highlight.remove();
     tooltip.remove();
-    document.documentElement.classList.remove('__dashsnap_macro_recording');
+    clickShield.remove();
     if (macroStyle.parentNode) macroStyle.remove();
     window.__dashsnap_macro_active = false;
   }
