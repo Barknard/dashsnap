@@ -575,10 +575,7 @@ const MACRO_OVERLAY_JS = `
   // Crosshair cursor
   const style = document.createElement('style');
   style.id = '__dashsnap_macro_style';
-  style.textContent = \`
-    .__dashsnap_recording, .__dashsnap_recording * { cursor: crosshair !important; }
-    @keyframes __ds_pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
-  \`;
+  style.textContent = '.__dashsnap_recording, .__dashsnap_recording * { cursor: crosshair !important; } @keyframes __ds_pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }';
   document.head.appendChild(style);
   document.documentElement.classList.add('__dashsnap_recording');
 
@@ -906,7 +903,24 @@ export class Recorder {
 
   async startMacroRecording() {
     this.stopPolling();
-    await this.view.webContents.executeJavaScript(MACRO_OVERLAY_JS);
+    try {
+      console.log('[Recorder] Injecting MACRO_OVERLAY_JS into BrowserView...');
+      await this.view.webContents.executeJavaScript(MACRO_OVERLAY_JS);
+      console.log('[Recorder] MACRO_OVERLAY_JS injected successfully');
+      // Verify the overlay was actually created
+      const check = await this.view.webContents.executeJavaScript(`
+        JSON.stringify({
+          active: !!window.__dashsnap_macro_active,
+          banner: !!document.getElementById('__dashsnap_macro_banner'),
+          highlight: !!document.getElementById('__dashsnap_macro_highlight'),
+          tooltip: !!document.getElementById('__dashsnap_macro_tooltip'),
+          hasRecordingClass: document.documentElement.classList.contains('__dashsnap_recording'),
+        })
+      `);
+      console.log('[Recorder] Overlay status:', check);
+    } catch (err) {
+      console.error('[Recorder] Failed to inject MACRO_OVERLAY_JS:', err);
+    }
     this.pollForMacroResult();
   }
 
