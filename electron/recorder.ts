@@ -683,7 +683,13 @@ const MACRO_OVERLAY_JS = `
   let lastEl = null;
   function onMouseMove(e) {
     var rawEl = e.target;
-    if (!rawEl || rawEl === banner || rawEl === highlight || rawEl === tooltip || rawEl.closest('#__dashsnap_macro_banner')) return;
+    if (!rawEl || rawEl === banner || rawEl === highlight || rawEl === tooltip || (rawEl.closest && rawEl.closest('#__dashsnap_macro_banner'))) {
+      // Hide highlight and tooltip when over the banner/overlay elements
+      highlight.style.display = 'none';
+      tooltip.style.display = 'none';
+      lastEl = null;
+      return;
+    }
     // Show the interactive ancestor, not the inner div/span
     const el = findInteractiveAncestor(rawEl);
     if (el === lastEl) return;
