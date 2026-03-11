@@ -379,7 +379,7 @@ const FILTER_OVERLAY_JS = `
   // Flash element on record
   function flashElement(el) {
     const flash = document.createElement('div');
-    flash.style.cssText = 'position:fixed;z-index:2147483645;background:rgba(34,211,238,0.3);border:2px solid #22D3EE;border-radius:3px;pointer-events:none;transition:opacity 0.5s;';
+    flash.style.cssText = 'position:fixed;z-index:2147483647;background:rgba(34,211,238,0.3);border:2px solid #22D3EE;border-radius:3px;pointer-events:none;transition:opacity 0.5s;';
     const rect = el.getBoundingClientRect();
     flash.style.left = rect.left + 'px';
     flash.style.top = rect.top + 'px';
@@ -631,7 +631,7 @@ const MACRO_OVERLAY_JS = `
 
   var highlight = document.createElement('div');
   highlight.id = '__dashsnap_macro_highlight';
-  highlight.style.cssText = 'position:fixed;z-index:2147483645;border:2px solid #7C5CFC;background:rgba(124,92,252,0.12);border-radius:3px;pointer-events:none;display:none;transition:all 0.05s ease;';
+  highlight.style.cssText = 'position:fixed;z-index:2147483647;border:2px solid #7C5CFC;background:rgba(124,92,252,0.08);border-radius:3px;pointer-events:none;display:none;transition:all 0.05s ease;';
   document.body.appendChild(highlight);
 
   var tooltip = document.createElement('div');
@@ -647,7 +647,7 @@ const MACRO_OVERLAY_JS = `
 
   function flashElement(el) {
     var flash = document.createElement('div');
-    flash.style.cssText = 'position:fixed;z-index:2147483645;background:rgba(34,211,238,0.3);border:2px solid #22D3EE;border-radius:3px;pointer-events:none;transition:opacity 0.5s;';
+    flash.style.cssText = 'position:fixed;z-index:2147483647;background:rgba(34,211,238,0.3);border:2px solid #22D3EE;border-radius:3px;pointer-events:none;transition:opacity 0.5s;';
     var rect = el.getBoundingClientRect();
     flash.style.left = rect.left + 'px';
     flash.style.top = rect.top + 'px';
