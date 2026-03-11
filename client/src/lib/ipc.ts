@@ -169,7 +169,7 @@ export const flow = {
     return window.dashsnap!.invoke('flow:save', config);
   },
   load: async () => {
-    if (!isElectron) return { defaults: { clickWaitSeconds: 3, snapWaitSeconds: 5, navigationTimeoutSeconds: 30 }, flows: [] };
+    if (!isElectron) return { defaults: { stepWaitSeconds: 8, navigationTimeoutSeconds: 30 }, flows: [] };
     return window.dashsnap!.invoke('flow:load');
   },
   exportFlow: async (flowId: string) => {

@@ -4,8 +4,7 @@ import type { FlowConfig, AppSettings } from '../shared/types';
 
 const DEFAULT_FLOW_CONFIG: FlowConfig = {
   defaults: {
-    clickWaitSeconds: 3,
-    snapWaitSeconds: 5,
+    stepWaitSeconds: 8,
     navigationTimeoutSeconds: 30,
   },
   flows: [],

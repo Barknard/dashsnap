@@ -30,8 +30,7 @@ function StatusIcon({ status }: { status: RunStepStatus }) {
 export function RunPanel() {
   const activeFlow = useFlowStore(s => s.getActiveFlow());
   const defaults = useFlowStore(s => s.defaults);
-  const setClickWait = useFlowStore(s => s.setClickWait);
-  const setSnapWait = useFlowStore(s => s.setSnapWait);
+  const setStepWait = useFlowStore(s => s.setStepWait);
   const selectedStepIndex = useFlowStore(s => s.selectedStepIndex);
   const updateFlowTemplate = useFlowStore(s => s.updateFlowTemplate);
 
@@ -142,22 +141,22 @@ export function RunPanel() {
         </div>
       </Card>
 
-      {/* Timing defaults */}
+      {/* Timing */}
       <Card className="p-3 space-y-3">
         <h4 className="text-sm font-semibold text-ds-text-dim uppercase tracking-wider flex items-center gap-1.5">
           <Clock className="w-3 h-3 text-ds-amber" />
-          Timing Defaults
+          Time Between Steps
         </h4>
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs text-ds-text-muted">Wait after click</span>
-            <span className="text-xs font-mono font-bold text-ds-accent">{defaults.clickWaitSeconds}s</span>
+            <span className="text-xs text-ds-text-muted">Wait after each step</span>
+            <span className="text-xs font-mono font-bold text-ds-accent">{defaults.stepWaitSeconds}s</span>
           </div>
           <Slider.Root
-            value={[defaults.clickWaitSeconds]}
-            onValueChange={([v]) => setClickWait(v)}
+            value={[defaults.stepWaitSeconds]}
+            onValueChange={([v]) => setStepWait(v)}
             min={1}
-            max={15}
+            max={20}
             step={1}
             className="relative flex items-center h-5 w-full"
           >
@@ -165,25 +164,6 @@ export function RunPanel() {
               <Slider.Range className="absolute h-full rounded-full bg-gradient-to-r from-ds-accent to-ds-cyan" />
             </Slider.Track>
             <Slider.Thumb className="block w-4 h-4 rounded-full bg-white border-2 border-ds-accent shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-ds-accent/50 cursor-grab active:cursor-grabbing transition-shadow" />
-          </Slider.Root>
-        </div>
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs text-ds-text-muted">Wait after snap</span>
-            <span className="text-xs font-mono font-bold text-ds-emerald">{defaults.snapWaitSeconds}s</span>
-          </div>
-          <Slider.Root
-            value={[defaults.snapWaitSeconds]}
-            onValueChange={([v]) => setSnapWait(v)}
-            min={1}
-            max={15}
-            step={1}
-            className="relative flex items-center h-5 w-full"
-          >
-            <Slider.Track className="relative h-1.5 w-full rounded-full bg-ds-bg">
-              <Slider.Range className="absolute h-full rounded-full bg-gradient-to-r from-ds-emerald to-ds-cyan" />
-            </Slider.Track>
-            <Slider.Thumb className="block w-4 h-4 rounded-full bg-white border-2 border-ds-emerald shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-ds-emerald/50 cursor-grab active:cursor-grabbing transition-shadow" />
           </Slider.Root>
         </div>
       </Card>

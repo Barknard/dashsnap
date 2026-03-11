@@ -30,7 +30,7 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
   const [navUrl, setNavUrl] = useState('');
   const [scrollX, setScrollX] = useState('0');
   const [scrollY, setScrollY] = useState('0');
-  const [waitSeconds, setWaitSeconds] = useState(String(defaults.clickWaitSeconds));
+  const [waitSeconds, setWaitSeconds] = useState(String(defaults.stepWaitSeconds));
 
   const handleRecordMacro = () => {
     if (!activeFlow) return;
@@ -40,7 +40,7 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
 
   const handleAddWait = () => {
     if (!activeFlow) return;
-    const seconds = Math.max(1, Math.min(60, parseInt(waitSeconds) || defaults.clickWaitSeconds));
+    const seconds = Math.max(1, Math.min(60, parseInt(waitSeconds) || defaults.stepWaitSeconds));
     const step: FlowStep = {
       type: 'WAIT',
       id: generateId('step'),

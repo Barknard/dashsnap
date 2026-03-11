@@ -97,8 +97,10 @@ export function UrlBar() {
     setEditingIndex(null);
   };
 
+  const isBlank = !browserUrl || browserUrl === 'about:blank';
+
   return (
-    <div className="flex items-center gap-1.5 px-3 py-2 border-b border-ds-border">
+    <div className="flex items-center gap-1.5 px-3 py-2 border-b border-ds-border bg-ds-surface/80">
       <Tooltip content="Back">
         <Button variant="ghost" size="icon-sm" onClick={() => browser.back()}>
           <ChevronLeft className="w-4 h-4" />
@@ -116,10 +118,17 @@ export function UrlBar() {
       </Tooltip>
 
       <div className={cn(
-        'flex-1 relative flex items-center rounded-lg border bg-ds-bg transition-all duration-200',
-        isFocused ? 'border-ds-accent shadow-[0_0_12px_rgba(59,130,246,0.15)]' : 'border-ds-border',
+        'flex-1 relative flex items-center rounded-lg border-2 transition-all duration-200',
+        isFocused
+          ? 'border-ds-accent bg-ds-bg shadow-[0_0_12px_rgba(59,130,246,0.2)]'
+          : isBlank
+            ? 'border-ds-accent/40 bg-ds-accent/[0.06]'
+            : 'border-ds-border bg-ds-surface-hover',
       )}>
-        <Globe className="absolute left-2.5 w-3.5 h-3.5 text-ds-text-dim pointer-events-none" />
+        <Globe className={cn(
+          'absolute left-2.5 w-3.5 h-3.5 pointer-events-none',
+          isBlank ? 'text-ds-accent/60' : 'text-ds-text-dim',
+        )} />
         <input
           ref={inputRef}
           type="text"
@@ -128,8 +137,11 @@ export function UrlBar() {
           onKeyDown={handleKeyDown}
           onFocus={() => { setIsFocused(true); inputRef.current?.select(); }}
           onBlur={() => setIsFocused(false)}
-          placeholder="Enter URL or search..."
-          className="w-full h-7 pl-8 pr-3 text-xs bg-transparent text-ds-text placeholder:text-ds-text-dim focus:outline-none font-mono"
+          placeholder={isBlank ? 'Navigate to a website to start recording...' : 'Enter URL or search...'}
+          className={cn(
+            'w-full h-8 pl-8 pr-3 text-xs bg-transparent focus:outline-none font-mono',
+            isBlank ? 'text-ds-text-dim placeholder:text-ds-accent/50' : 'text-ds-text placeholder:text-ds-text-dim',
+          )}
           spellCheck={false}
         />
         {isLoading && (

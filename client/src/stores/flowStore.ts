@@ -6,7 +6,7 @@ import { flow as flowIpc } from '@/lib/ipc';
 interface FlowStore {
   flows: Flow[];
   activeFlowId: string | null;
-  defaults: { clickWaitSeconds: number; snapWaitSeconds: number; navigationTimeoutSeconds: number };
+  defaults: { stepWaitSeconds: number; navigationTimeoutSeconds: number };
   selectedStepIndex: number | null;
 
   // Computed
@@ -33,8 +33,7 @@ interface FlowStore {
   selectStep: (index: number | null) => void;
 
   // Defaults
-  setClickWait: (seconds: number) => void;
-  setSnapWait: (seconds: number) => void;
+  setStepWait: (seconds: number) => void;
 
   // Import/Export
   exportFlow: (id: string) => Promise<void>;
@@ -44,7 +43,7 @@ interface FlowStore {
 export const useFlowStore = create<FlowStore>((set, get) => ({
   flows: [],
   activeFlowId: null,
-  defaults: { clickWaitSeconds: 3, snapWaitSeconds: 5, navigationTimeoutSeconds: 30 },
+  defaults: { stepWaitSeconds: 8, navigationTimeoutSeconds: 30 },
   selectedStepIndex: null,
 
   getActiveFlow: () => {
@@ -250,13 +249,8 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
 
   selectStep: (index: number | null) => set({ selectedStepIndex: index }),
 
-  setClickWait: (seconds: number) => {
-    set(state => ({ defaults: { ...state.defaults, clickWaitSeconds: seconds } }));
-    get().saveFlows();
-  },
-
-  setSnapWait: (seconds: number) => {
-    set(state => ({ defaults: { ...state.defaults, snapWaitSeconds: seconds } }));
+  setStepWait: (seconds: number) => {
+    set(state => ({ defaults: { ...state.defaults, stepWaitSeconds: seconds } }));
     get().saveFlows();
   },
 

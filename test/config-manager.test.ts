@@ -15,8 +15,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 const DEFAULT_FLOW_CONFIG: FlowConfig = {
   defaults: {
-    clickWaitSeconds: 1,
-    snapWaitSeconds: 0.5,
+    stepWaitSeconds: 8,
     navigationTimeoutSeconds: 30,
   },
   flows: [],
@@ -165,7 +164,7 @@ describe('ConfigManager', () => {
   describe('loadFlows', () => {
     it('should return parsed flow config from file', () => {
       const config: FlowConfig = {
-        defaults: { clickWaitSeconds: 2, snapWaitSeconds: 1, navigationTimeoutSeconds: 60 },
+        defaults: { stepWaitSeconds: 2, navigationTimeoutSeconds: 60 },
         flows: [sampleFlow()],
       };
       mockFs.readFileSync.mockReturnValue(JSON.stringify(config));
@@ -173,7 +172,7 @@ describe('ConfigManager', () => {
       const manager = createManager();
       const result = manager.loadFlows();
 
-      expect(result.defaults.clickWaitSeconds).toBe(2);
+      expect(result.defaults.stepWaitSeconds).toBe(2);
       expect(result.flows).toHaveLength(1);
       expect(result.flows[0].name).toBe('Test Flow');
     });
@@ -191,15 +190,14 @@ describe('ConfigManager', () => {
 
     it('should merge with defaults for missing fields', () => {
       mockFs.readFileSync.mockReturnValue(JSON.stringify({
-        defaults: { clickWaitSeconds: 5 },
+        defaults: { stepWaitSeconds: 5 },
         flows: [],
       }));
 
       const manager = createManager();
       const result = manager.loadFlows();
 
-      expect(result.defaults.clickWaitSeconds).toBe(5);
-      expect(result.defaults.snapWaitSeconds).toBe(0.5); // default
+      expect(result.defaults.stepWaitSeconds).toBe(5);
       expect(result.defaults.navigationTimeoutSeconds).toBe(30); // default
     });
 
@@ -363,18 +361,18 @@ describe('ConfigManager', () => {
   describe('mergeConfig', () => {
     it('should merge defaults without losing existing values', () => {
       const current: FlowConfig = {
-        defaults: { clickWaitSeconds: 3, snapWaitSeconds: 1, navigationTimeoutSeconds: 30 },
+        defaults: { stepWaitSeconds: 3, navigationTimeoutSeconds: 30 },
         flows: [sampleFlow({ id: 'existing' })],
       };
       mockFs.readFileSync.mockReturnValue(JSON.stringify(current));
 
       const manager = createManager();
       const result = manager.mergeConfig({
-        defaults: { clickWaitSeconds: 5 } as FlowConfig['defaults'],
+        defaults: { stepWaitSeconds: 5 } as FlowConfig['defaults'],
       });
 
-      expect(result.defaults.clickWaitSeconds).toBe(5); // updated
-      expect(result.defaults.snapWaitSeconds).toBe(1); // preserved
+      expect(result.defaults.stepWaitSeconds).toBe(5); // updated
+      expect(result.defaults.navigationTimeoutSeconds).toBe(30); // preserved
       expect(result.flows).toHaveLength(1); // preserved
     });
 

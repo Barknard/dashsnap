@@ -204,7 +204,7 @@ export class FlowRunner {
 
   private async executeStep(
     step: FlowStep,
-    defaults: { clickWaitSeconds: number; snapWaitSeconds: number; navigationTimeoutSeconds: number },
+    defaults: { stepWaitSeconds: number; navigationTimeoutSeconds: number },
     outputDir: string,
     screenshots: Array<{ name: string; path: string; slideLayout?: PptxLayout }>,
     logLines: string[],
@@ -215,7 +215,7 @@ export class FlowRunner {
     try {
       switch (step.type) {
         case 'CLICK':
-          result.status = await this.executeClick(step, defaults.clickWaitSeconds);
+          result.status = await this.executeClick(step, defaults.stepWaitSeconds);
           break;
 
         case 'WAIT':
@@ -233,7 +233,7 @@ export class FlowRunner {
             result.status = 'error';
             result.message = 'Screenshot capture failed';
           }
-          await this.delay(defaults.snapWaitSeconds * 1000);
+          await this.delay(defaults.stepWaitSeconds * 1000);
           break;
         }
 
@@ -251,15 +251,15 @@ export class FlowRunner {
           break;
 
         case 'HOVER':
-          result.status = await this.executeHover(step, defaults.clickWaitSeconds);
+          result.status = await this.executeHover(step, defaults.stepWaitSeconds);
           break;
 
         case 'SELECT':
-          result.status = await this.executeSelect(step, defaults.clickWaitSeconds);
+          result.status = await this.executeSelect(step, defaults.stepWaitSeconds);
           break;
 
         case 'TYPE':
-          result.status = await this.executeType(step, defaults.clickWaitSeconds);
+          result.status = await this.executeType(step, defaults.stepWaitSeconds);
           break;
 
         case 'SCROLL_ELEMENT':
@@ -267,15 +267,15 @@ export class FlowRunner {
           break;
 
         case 'SEARCH_SELECT':
-          result.status = await this.executeSearchSelect(step, defaults.clickWaitSeconds);
+          result.status = await this.executeSearchSelect(step, defaults.stepWaitSeconds);
           break;
 
         case 'FILTER':
-          result.status = await this.executeFilter(step, defaults.clickWaitSeconds);
+          result.status = await this.executeFilter(step, defaults.stepWaitSeconds);
           break;
 
         case 'MACRO':
-          result.status = await this.executeMacro(step, outputDir, screenshots);
+          result.status = await this.executeMacro(step, defaults, outputDir, screenshots);
           break;
       }
     } catch (err) {
@@ -645,12 +645,12 @@ export class FlowRunner {
 
   private async executeMacro(
     step: MacroStep,
+    defaults: { stepWaitSeconds: number; navigationTimeoutSeconds: number },
     outputDir?: string,
     screenshots?: Array<{ name: string; path: string; slideLayout?: PptxLayout }>,
   ): Promise<'success' | 'warning'> {
     const wc = this.view.webContents;
-    const waitBetween = step.waitBetween ?? 500;
-    const waitSec = (waitBetween / 1000);
+    const waitSec = step.waitBetween != null ? (step.waitBetween / 1000) : defaults.stepWaitSeconds;
     let worstStatus: 'success' | 'warning' = 'success';
 
     for (const action of step.actions) {
@@ -715,7 +715,7 @@ export class FlowRunner {
               });
             }
           }
-          await this.delay(waitBetween);
+          await this.delay(waitSec * 1000);
           break;
         }
 
@@ -743,7 +743,7 @@ export class FlowRunner {
               console.error('Macro snap failed:', err);
             }
           }
-          await this.delay(waitBetween);
+          await this.delay(waitSec * 1000);
           break;
         }
       }

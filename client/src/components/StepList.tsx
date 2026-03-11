@@ -198,6 +198,14 @@ export function StepList({ onEditStep }: StepListProps) {
           const runResult = runProgress?.results.find(r => r.stepId === step.id);
           const isCurrentlyRunning = runProgress?.status === 'running' && runProgress.currentStep === index;
 
+          // Group detection
+          const group = step.group;
+          const prevGroup = index > 0 ? flow.steps[index - 1].group : undefined;
+          const nextGroup = index < flow.steps.length - 1 ? flow.steps[index + 1].group : undefined;
+          const isGroupStart = !!group && group !== prevGroup;
+          const isInGroup = !!group;
+          const isGroupEnd = !!group && group !== nextGroup;
+
           const isSnap = step.type === 'SNAP';
           const isExpanded = isSnap && expandedSnapId === step.id;
           const snapStep = isSnap ? step as SnapStep : null;
@@ -227,29 +235,40 @@ export function StepList({ onEditStep }: StepListProps) {
           const hasCustomLayout = !!sl;
 
           return (
-            <motion.div
-              key={step.id}
-              layout
-              initial={{ opacity: 0, x: -12 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 12, scale: 0.95 }}
-              transition={{ duration: 0.2, type: 'spring', stiffness: 300, damping: 25 }}
-              draggable
-              onDragStart={() => handleDragStart(index)}
-              onDragOver={(e) => handleDragOver(e as unknown as React.DragEvent, index)}
-              onDrop={(e) => handleDrop(e as unknown as React.DragEvent, index)}
-              onDragEnd={handleDragEnd}
-              onMouseEnter={() => handleStepMouseEnter(step)}
-              onMouseLeave={handleStepMouseLeave}
-              className={cn(
-                'rounded-lg border-l-[3px] border border-ds-border/50 bg-ds-surface/50 overflow-hidden',
-                'transition-all duration-150',
-                isSelected && 'bg-ds-accent/5 border-ds-accent/30 border-l-ds-accent',
-                !isSelected && statusBorderColor(runResult?.status),
-                isCurrentlyRunning && 'ring-1 ring-ds-accent/40 bg-ds-accent/5',
-                dragOverIndex === index && dragIndexRef.current !== index && 'border-t-2 border-t-ds-accent',
+            <div key={step.id}>
+              {/* Group header */}
+              {isGroupStart && (
+                <div className="flex items-center gap-1.5 px-2 py-1 mb-1">
+                  <Clapperboard className="w-3 h-3 text-ds-accent" />
+                  <span className="text-[10px] font-bold text-ds-accent uppercase tracking-wider">Recording Session</span>
+                  <div className="flex-1 h-px bg-ds-accent/20" />
+                </div>
               )}
-            >
+              <motion.div
+                layout
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 12, scale: 0.95 }}
+                transition={{ duration: 0.2, type: 'spring', stiffness: 300, damping: 25 }}
+                draggable
+                onDragStart={() => handleDragStart(index)}
+                onDragOver={(e) => handleDragOver(e as unknown as React.DragEvent, index)}
+                onDrop={(e) => handleDrop(e as unknown as React.DragEvent, index)}
+                onDragEnd={handleDragEnd}
+                onMouseEnter={() => handleStepMouseEnter(step)}
+                onMouseLeave={handleStepMouseLeave}
+                className={cn(
+                  'rounded-lg border-l-[3px] border border-ds-border/50 bg-ds-surface/50 overflow-hidden',
+                  'transition-all duration-150',
+                  isSelected && 'bg-ds-accent/5 border-ds-accent/30 border-l-ds-accent',
+                  !isSelected && !isInGroup && statusBorderColor(runResult?.status),
+                  !isSelected && isInGroup && 'border-l-ds-accent/30',
+                  isCurrentlyRunning && 'ring-1 ring-ds-accent/40 bg-ds-accent/5',
+                  dragOverIndex === index && dragIndexRef.current !== index && 'border-t-2 border-t-ds-accent',
+                  isInGroup && !isGroupEnd && 'mb-0 rounded-b-none',
+                  isInGroup && !isGroupStart && 'rounded-t-none border-t-0',
+                )}
+              >
               {/* Main row */}
               <div
                 onClick={() => selectStep(isSelected ? null : index)}
@@ -475,6 +494,7 @@ export function StepList({ onEditStep }: StepListProps) {
                 )}
               </AnimatePresence>
             </motion.div>
+            </div>
           );
         })}
       </AnimatePresence>

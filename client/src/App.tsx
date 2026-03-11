@@ -18,7 +18,7 @@ import { useFlowStore } from './stores/flowStore';
 import { useAppStore } from './stores/appStore';
 import { recorder, app as appIpc, flow as flowIpc } from './lib/ipc';
 import { generateId } from './lib/utils';
-import type { FlowStep, ClickStep, SnapStep, HoverStep, SelectStep, TypeStep, ScrollElementStep, SearchSelectStep, FilterStep, MacroStep, MacroAction, NavigateStep, RunProgress } from '@shared/types';
+import type { FlowStep, ClickStep, SnapStep, HoverStep, SelectStep, TypeStep, ScrollElementStep, SearchSelectStep, FilterStep, NavigateStep, RunProgress } from '@shared/types';
 import { toast } from 'sonner';
 
 export default function App() {
@@ -219,7 +219,7 @@ export default function App() {
       setNamePrompt({ open: true, defaultName: step.label, step });
     };
 
-    const handleMacroRecorded = (actions: Array<{ selector?: string; selectorStrategy?: string; fallbackXY?: [number, number]; label?: string; action: string; value?: string; scrollTarget?: { x: number; y: number; isPage: boolean }; elementMeta?: { tagName: string; inputType?: string; placeholder?: string; options?: string[] } }>, startUrl: string) => {
+    const handleMacroRecorded = (actions: Array<{ selector?: string; selectorStrategy?: string; fallbackXY?: [number, number]; label?: string; action: string; value?: string; scrollTarget?: { x: number; y: number; isPage: boolean }; snapRegion?: { x: number; y: number; width: number; height: number }; elementMeta?: { tagName: string; inputType?: string; placeholder?: string; options?: string[] } }>, startUrl: string) => {
       stopRecording();
 
       if (!actions || actions.length === 0) {
@@ -227,34 +227,105 @@ export default function App() {
         return;
       }
 
+      const groupId = `rec_${Date.now()}`;
+
       // Auto-insert a NAVIGATE step so playback starts on the same page
       if (startUrl && startUrl !== 'about:blank') {
-        const navStep: NavigateStep = {
+        const navStep: NavigateStep & { group?: string } = {
           type: 'NAVIGATE',
           id: generateId('step'),
           label: `Navigate: ${new URL(startUrl).hostname}`,
           url: startUrl,
+          group: groupId,
         };
         addStep(navStep);
-        toast.success(`Recorded: ${navStep.label}`);
       }
 
-      // Auto-detect which actions could use variables
-      const typeActions = actions.filter(a => a.action === 'type' || a.action === 'select');
-      const varHint = typeActions.length > 0
-        ? ` (${typeActions.length} variable-ready)`
-        : '';
+      // Convert each recorded action into an individual flow step
+      for (const action of actions) {
+        const selectorStrategy = (action.selectorStrategy || 'css') as ClickStep['selectorStrategy'];
+        let step: FlowStep;
 
-      const step: MacroStep = {
-        type: 'MACRO',
-        id: generateId('step'),
-        label: `Macro: ${actions.length} action${actions.length !== 1 ? 's' : ''}${varHint}`,
-        actions: actions as MacroAction[],
-        waitBetween: 500,
-      };
+        switch (action.action) {
+          case 'click':
+            step = {
+              type: 'CLICK',
+              id: generateId('step'),
+              label: action.label || 'Click element',
+              selector: action.selector || '',
+              selectorStrategy,
+              fallbackXY: action.fallbackXY,
+              group: groupId,
+            } as FlowStep;
+            break;
+          case 'type':
+            step = {
+              type: 'TYPE',
+              id: generateId('step'),
+              label: `Type in: ${action.label || 'input'}`,
+              selector: action.selector || '',
+              selectorStrategy,
+              fallbackXY: action.fallbackXY,
+              text: action.value || '',
+              clearFirst: true,
+              clickOffAfter: false,
+              group: groupId,
+            } as FlowStep;
+            break;
+          case 'select':
+            step = {
+              type: 'SELECT',
+              id: generateId('step'),
+              label: `Select: ${action.label || 'dropdown'}`,
+              selector: action.selector || '',
+              selectorStrategy,
+              fallbackXY: action.fallbackXY,
+              optionValue: action.value || '',
+              clickOffAfter: false,
+              group: groupId,
+            } as FlowStep;
+            break;
+          case 'scroll':
+            if (action.scrollTarget?.isPage) {
+              step = {
+                type: 'SCROLL',
+                id: generateId('step'),
+                label: action.label || `Scroll to (${action.scrollTarget.x}, ${action.scrollTarget.y})`,
+                x: action.scrollTarget.x,
+                y: action.scrollTarget.y,
+                group: groupId,
+              } as FlowStep;
+            } else {
+              step = {
+                type: 'SCROLL_ELEMENT',
+                id: generateId('step'),
+                label: action.label || 'Scroll element',
+                selector: action.selector || '',
+                selectorStrategy,
+                fallbackXY: action.fallbackXY,
+                scrollTop: action.scrollTarget?.y ?? 0,
+                scrollLeft: action.scrollTarget?.x ?? 0,
+                group: groupId,
+              } as FlowStep;
+            }
+            break;
+          case 'snap':
+            step = {
+              type: 'SNAP',
+              id: generateId('step'),
+              label: action.label || 'Screenshot',
+              region: action.snapRegion || { x: 0, y: 0, width: 100, height: 100 },
+              group: groupId,
+            } as FlowStep;
+            break;
+          default:
+            continue;
+        }
 
-      setNameInput(step.label);
-      setNamePrompt({ open: true, defaultName: step.label, step });
+        addStep(step);
+      }
+
+      toast.success(`Recorded ${actions.length} steps`);
     };
 
     const handleCancelled = () => {

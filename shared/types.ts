@@ -157,7 +157,7 @@ export interface FlowVariable {
   defaultValue: string;
 }
 
-export type FlowStep = ClickStep | WaitStep | SnapStep | NavigateStep | ScrollStep | HoverStep | SelectStep | TypeStep | ScrollElementStep | SearchSelectStep | FilterStep | MacroStep;
+export type FlowStep = (ClickStep | WaitStep | SnapStep | NavigateStep | ScrollStep | HoverStep | SelectStep | TypeStep | ScrollElementStep | SearchSelectStep | FilterStep | MacroStep) & { group?: string };
 
 // ─── Flow ─────────────────────────────────────────────────────────────────────
 
@@ -176,8 +176,7 @@ export interface Flow {
 
 export interface FlowConfig {
   defaults: {
-    clickWaitSeconds: number;
-    snapWaitSeconds: number;
+    stepWaitSeconds: number;
     navigationTimeoutSeconds: number;
   };
   flows: Flow[];

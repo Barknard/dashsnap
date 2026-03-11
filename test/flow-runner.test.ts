@@ -21,8 +21,7 @@ interface FlowRunnerOptions {
   onProgress: (progress: RunProgress) => void;
   screenshotDir: string;
   defaults: {
-    clickWaitSeconds: number;
-    snapWaitSeconds: number;
+    stepWaitSeconds: number;
     navigationTimeoutSeconds: number;
   };
 }
@@ -248,8 +247,7 @@ function createRunner(overrides: Partial<FlowRunnerOptions> = {}) {
     onProgress,
     screenshotDir: '/mock/screenshots',
     defaults: {
-      clickWaitSeconds: 1,
-      snapWaitSeconds: 0.5,
+      stepWaitSeconds: 1,
       navigationTimeoutSeconds: 30,
     },
     ...overrides,
