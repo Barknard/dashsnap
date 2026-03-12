@@ -186,37 +186,38 @@ export function ActionPanel({
                     {action.label}
                   </span>
                 </div>
-                <p className="text-xs text-ds-text-dim truncate mt-0.5">
-                  {actionDetail(action)}
-                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <p className="text-xs text-ds-text-dim truncate flex-1 min-w-0">
+                    {actionDetail(action)}
+                  </p>
+                  {/* Wait override — compact, on the detail line */}
+                  {action.type !== 'WAIT' && action.type !== 'NAVIGATE' && (
+                    <span
+                      className="inline-flex items-center gap-0.5 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Clock className={cn('w-2.5 h-2.5', action.waitOverride != null ? 'text-ds-amber' : 'text-ds-text-dim')} />
+                      <input
+                        type="number"
+                        min={1.5}
+                        max={120}
+                        step={0.5}
+                        value={action.waitOverride ?? stepWaitSeconds}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          if (!isNaN(v)) {
+                            onUpdateAction(action.id, { waitOverride: Math.max(1.5, v) } as Partial<FlowStep>);
+                          }
+                        }}
+                        onFocus={(e) => e.target.select()}
+                        className="w-8 h-4 px-0.5 text-[10px] font-mono text-center bg-ds-bg border border-ds-border rounded focus:outline-none focus:border-ds-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none text-ds-text-muted"
+                        title="Wait time (seconds)"
+                      />
+                      <span className="text-[10px] text-ds-text-dim">s</span>
+                    </span>
+                  )}
+                </div>
               </div>
-
-              {/* Wait override — always visible for applicable types */}
-              {action.type !== 'WAIT' && action.type !== 'NAVIGATE' && (
-                <span
-                  className="inline-flex items-center gap-0.5 shrink-0"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Clock className={cn('w-3 h-3', action.waitOverride != null ? 'text-ds-amber' : 'text-ds-text-dim')} />
-                  <input
-                    type="number"
-                    min={1.5}
-                    max={120}
-                    step={0.5}
-                    value={action.waitOverride ?? stepWaitSeconds}
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value);
-                      if (!isNaN(v)) {
-                        onUpdateAction(action.id, { waitOverride: Math.max(1.5, v) } as Partial<FlowStep>);
-                      }
-                    }}
-                    onFocus={(e) => e.target.select()}
-                    className="w-9 h-5 px-0.5 text-xs font-mono text-center bg-ds-bg border border-ds-border rounded focus:outline-none focus:border-ds-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none text-ds-text-muted"
-                    title="Wait time (seconds)"
-                  />
-                  <span className="text-xs text-ds-text-dim">s</span>
-                </span>
-              )}
 
               {/* Hover actions */}
               <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
