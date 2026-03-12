@@ -13,6 +13,7 @@ export class FlowRunner {
   private currentVariables: Record<string, string> = {};
   private _delayResolve: (() => void) | null = null;
   private _runTimestamp: string = '';
+  private _flowPrefix: string = '';
 
   private generateRunTimestamp(): string {
     const d = new Date();
@@ -33,6 +34,7 @@ export class FlowRunner {
     this.running = true;
     this.shouldStop = false;
     this._runTimestamp = this.generateRunTimestamp();
+    this._flowPrefix = this.sanitizeLabel(flow.name || 'report');
 
     const settings = this.config.loadSettings();
     const outputDir = settings.outputPath ||
@@ -115,6 +117,7 @@ export class FlowRunner {
     if (!flow || !flow.steps[stepIndex]) return;
 
     this._runTimestamp = this.generateRunTimestamp();
+    this._flowPrefix = this.sanitizeLabel(flow.name || 'report');
 
     const settings = this.config.loadSettings();
     const outputDir = settings.outputPath ||
@@ -495,12 +498,12 @@ export class FlowRunner {
         height: step.region.height,
       });
 
-      // Build meaningful filename: <sanitized-label>_<timestamp>_<index>[_vars].png
+      // Build meaningful filename: <flow>_<label>_<timestamp>_<index>[_vars].png
       const safeName = this.sanitizeLabel(step.label || 'capture');
       const varSuffix = Object.keys(this.currentVariables).length > 0
         ? '_' + Object.values(this.currentVariables).join('_').replace(/[^a-zA-Z0-9_-]/g, '')
         : '';
-      const filename = `${safeName}_${this._runTimestamp}_${String(index + 1).padStart(2, '0')}${varSuffix}.png`;
+      const filename = `${this._flowPrefix}_${safeName}_${this._runTimestamp}_${String(index + 1).padStart(2, '0')}${varSuffix}.png`;
       const filePath = path.join(outputDir, filename);
       fs.writeFileSync(filePath, image.toPNG());
       return filePath;
@@ -898,7 +901,7 @@ export class FlowRunner {
               const varSuffix = Object.keys(this.currentVariables).length > 0
                 ? '_' + Object.values(this.currentVariables).join('_').replace(/[^a-zA-Z0-9_-]/g, '')
                 : '';
-              const filename = `${safeName}_${this._runTimestamp}_${String(screenshots.length + 1).padStart(2, '0')}${varSuffix}.png`;
+              const filename = `${this._flowPrefix}_${safeName}_${this._runTimestamp}_${String(screenshots.length + 1).padStart(2, '0')}${varSuffix}.png`;
               const filePath = path.join(outputDir, filename);
               fs.writeFileSync(filePath, image.toPNG());
               screenshots.push({
