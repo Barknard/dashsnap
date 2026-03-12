@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Images } from 'lucide-react';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { Header } from './components/Header';
@@ -6,14 +6,16 @@ import { UrlBar } from './components/UrlBar';
 import { FlowMenu } from './components/FlowMenu';
 import { FlowPicker } from './components/FlowPicker';
 import { RecordPanel } from './components/RecordPanel';
+import { SlideCanvas } from './components/SlideCanvas';
 import { OutputGallery } from './components/OutputGallery';
 import { SettingsDialog } from './components/SettingsDialog';
 import { StepEditDialog } from './components/StepEditDialog';
 import { Button } from './components/ui/Button';
 import { useFlowStore } from './stores/flowStore';
 import { useAppStore } from './stores/appStore';
-import { recorder, app as appIpc, flow as flowIpc } from './lib/ipc';
+import { recorder, app as appIpc, flow as flowIpc, browser } from './lib/ipc';
 import { generateId } from './lib/utils';
+import { deriveSlides } from './lib/slides';
 import type { FlowStep, ClickStep, SnapStep, HoverStep, SelectStep, TypeStep, ScrollElementStep, SearchSelectStep, FilterStep, RunProgress } from '@shared/types';
 import { toast } from 'sonner';
 
@@ -29,16 +31,50 @@ export default function App() {
   const setUpdateError = useAppStore(s => s.setUpdateError);
   const setUpdateDownloadComplete = useAppStore(s => s.setUpdateDownloadComplete);
   const isRunning = useAppStore(s => s.isRunning);
+  const slideEditMode = useAppStore(s => s.slideEditMode);
+  const setSlideEditMode = useAppStore(s => s.setSlideEditMode);
+  const globalLayout = useAppStore(s => s.settings.pptxLayout);
 
   const loadFlows = useFlowStore(s => s.loadFlows);
   const addStep = useFlowStore(s => s.addStep);
+  const updateStep = useFlowStore(s => s.updateStep);
   const activeFlowId = useFlowStore(s => s.activeFlowId);
-  // Fix #4: Use proper React subscriptions instead of getState()
   const activeFlowName = useFlowStore(s => s.getActiveFlow()?.name);
   const activeFlowStepCount = useFlowStore(s => s.getActiveFlow()?.steps.length ?? 0);
+  const activeFlow = useFlowStore(s => s.getActiveFlow());
 
   const [editingStep, setEditingStep] = useState<FlowStep | null>(null);
   const [showOutput, setShowOutput] = useState(false);
+  const [selectedSlideId, setSelectedSlideId] = useState<string | null>(null);
+
+  // Derive the selected slide for the canvas
+  const selectedSlide = activeFlow
+    ? deriveSlides(activeFlow.steps).slides.find(s => s.id === selectedSlideId) || null
+    : null;
+
+  // When a slide is selected, show the canvas in the main area
+  const handleSlideSelected = useCallback((slideId: string | null) => {
+    setSelectedSlideId(slideId);
+    if (slideId && activeFlow) {
+      const slide = deriveSlides(activeFlow.steps).slides.find(s => s.id === slideId);
+      if (slide) {
+        setSlideEditMode(true);
+        browser.hide();
+        return;
+      }
+    }
+    // If no slide selected, show browser
+    setSlideEditMode(false);
+    browser.show();
+  }, [activeFlow, setSlideEditMode]);
+
+  // Restore BrowserView when flow is cleared
+  useEffect(() => {
+    if (!activeFlowId && slideEditMode) {
+      setSlideEditMode(false);
+      browser.show();
+    }
+  }, [activeFlowId, slideEditMode, setSlideEditMode]);
 
   // Initialize
   useEffect(() => {
@@ -64,7 +100,7 @@ export default function App() {
     appIpc.onUpdateError((message: string) => setUpdateError(message));
   }, [loadFlows, loadSettings, setVersion, setUpdateAvailable, setUpdateStatus, setUpdateProgress, setUpdateError, setUpdateDownloadComplete]);
 
-  // Fix #2: Listen for recorded elements — auto-add steps without name dialog
+  // Listen for recorded elements
   useEffect(() => {
     const handleElementPicked = (data: { selector: string; label: string; strategy: string; xy: [number, number]; rect?: { x: number; y: number; width: number; height: number } }) => {
       const currentRecordingType = useAppStore.getState().recordingType;
@@ -147,7 +183,6 @@ export default function App() {
         } as ClickStep;
       }
 
-      // Fix #2: Auto-add without name dialog
       addStep(step);
       toast.success(`Recorded: ${step.label}`);
     };
@@ -197,7 +232,7 @@ export default function App() {
       toast.success(`Recorded: ${step.label}`);
     };
 
-    const handleMacroRecorded = (actions: Array<{ selector?: string; selectorStrategy?: string; fallbackXY?: [number, number]; label?: string; action: string; value?: string; scrollTarget?: { x: number; y: number; isPage: boolean }; snapRegion?: { x: number; y: number; width: number; height: number }; elementMeta?: { tagName: string; inputType?: string; placeholder?: string; options?: string[] } }>, startUrl: string) => {
+    const handleMacroRecorded = (actions: Array<{ selector?: string; selectorStrategy?: string; fallbackXY?: [number, number]; label?: string; action: string; value?: string; scrollTarget?: { x: number; y: number; isPage: boolean }; snapRegion?: { x: number; y: number; width: number; height: number }; previewPath?: string; elementMeta?: { tagName: string; inputType?: string; placeholder?: string; options?: string[] } }>, startUrl: string) => {
       stopRecording();
 
       if (!actions || actions.length === 0) {
@@ -290,6 +325,7 @@ export default function App() {
               id: generateId('step'),
               label: action.label || 'Screenshot',
               region: action.snapRegion || { x: 0, y: 0, width: 100, height: 100 },
+              previewPath: action.previewPath,
               group: groupId,
             } as FlowStep;
             break;
@@ -333,7 +369,7 @@ export default function App() {
       recorder.offMacroRecorded(handleMacroRecorded as (...args: unknown[]) => void);
       recorder.offCancelled(handleCancelled as (...args: unknown[]) => void);
     };
-  }, [addStep, stopRecording, setActiveTab]);
+  }, [addStep, stopRecording]);
 
   // Listen for flow progress
   useEffect(() => {
@@ -346,54 +382,93 @@ export default function App() {
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex flex-col h-screen w-[var(--sidebar-w,380px)] bg-ds-bg select-none overflow-hidden">
-        <Header />
-        <UrlBar />
+      <div className="flex flex-col h-screen w-full bg-ds-bg select-none overflow-hidden">
 
-        {hasActiveFlow ? (
-          <>
-            {/* Fix #3 + #13: Unified flow menu bar */}
-            <FlowMenu />
+        {/* ═══ Top Toolbar — full width: Logo + URL Bar ═══ */}
+        <div
+          className="flex items-center shrink-0 border-b border-ds-border bg-ds-surface/80 glass"
+          style={{ height: 'var(--toolbar-h, 44px)' }}
+        >
+          <Header />
+          <div className="w-px h-5 bg-ds-border/50 shrink-0" />
+          <UrlBar />
+        </div>
 
-            {/* Fix #3: Single-panel layout — RecordPanel contains everything */}
-            <div className="flex-1 min-h-0 overflow-hidden">
-              {showOutput ? (
-                <div className="h-full flex flex-col">
-                  <div className="flex items-center justify-between px-3 py-1.5 border-b border-ds-border bg-ds-surface/30">
-                    <span className="text-xs font-medium text-ds-text-dim uppercase tracking-wider flex items-center gap-1.5">
-                      <Images className="w-3.5 h-3.5" />
-                      Output Gallery
-                    </span>
-                    <Button variant="ghost" size="sm" onClick={() => setShowOutput(false)}>
-                      Back
-                    </Button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto">
-                    <OutputGallery />
-                  </div>
+        {/* ═══ Main Area: Sidebar + Content ═══ */}
+        <div className="flex flex-1 min-h-0">
+
+          {/* ─── Sidebar (380px) — "common region" container ─── */}
+          <div
+            className="flex flex-col bg-ds-surface/60 overflow-hidden shrink-0 shadow-[3px_0_16px_rgba(0,0,0,0.5)] border-r border-ds-border/60 relative z-10"
+            style={{ width: 'var(--sidebar-w, 380px)' }}
+          >
+            {hasActiveFlow ? (
+              <>
+                <FlowMenu />
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  {showOutput ? (
+                    <div className="h-full flex flex-col">
+                      <div className="flex items-center justify-between px-3 py-1.5 border-b border-ds-border bg-ds-surface/30">
+                        <span className="text-xs font-medium text-ds-text-dim uppercase tracking-wider flex items-center gap-1.5">
+                          <Images className="w-3.5 h-3.5" />
+                          Output Gallery
+                        </span>
+                        <Button variant="ghost" size="sm" onClick={() => setShowOutput(false)}>
+                          Back
+                        </Button>
+                      </div>
+                      <div className="flex-1 overflow-y-auto">
+                        <OutputGallery />
+                      </div>
+                    </div>
+                  ) : (
+                    <RecordPanel
+                      onEditStep={setEditingStep}
+                      onShowOutput={() => setShowOutput(true)}
+                      onSlideSelected={handleSlideSelected}
+                    />
+                  )}
                 </div>
-              ) : (
-                <RecordPanel onEditStep={setEditingStep} onShowOutput={() => setShowOutput(true)} />
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            <FlowPicker />
-          </div>
-        )}
+              </>
+            ) : (
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <FlowPicker />
+              </div>
+            )}
 
-        {/* Fix #4: Status bar with proper React subscriptions */}
-        <div className="flex items-center justify-between px-3 py-1.5 border-t border-ds-border bg-ds-surface/30 text-xs text-ds-text-dim">
-          <span>
-            {hasActiveFlow
-              ? `${activeFlowName} — ${activeFlowStepCount} steps`
-              : 'No flow selected'}
-          </span>
-          <span className="flex items-center gap-1">
-            <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-ds-accent animate-pulse' : 'bg-ds-emerald'}`} />
-            {isRunning ? 'Running' : 'Ready'}
-          </span>
+            {/* Status bar */}
+            <div className="flex items-center justify-between px-3 py-1.5 border-t border-ds-border bg-ds-surface/30 text-xs text-ds-text-dim shrink-0">
+              <span>
+                {hasActiveFlow
+                  ? `${activeFlowName} — ${activeFlowStepCount} actions`
+                  : 'No report selected'}
+              </span>
+              <span className="flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-ds-accent animate-pulse' : 'bg-ds-emerald'}`} />
+                {isRunning ? 'Running' : 'Ready'}
+              </span>
+            </div>
+          </div>
+
+          {/* ─── Main content area (behind BrowserView, or SlideCanvas) ─── */}
+          <div className="flex-1 min-w-0">
+            {slideEditMode && selectedSlide ? (
+              <SlideCanvas
+                slide={selectedSlide}
+                globalLayout={globalLayout}
+                onUpdateStep={updateStep}
+              />
+            ) : (
+              /* This area is covered by the Electron BrowserView.
+                 When BrowserView is hidden (slide edit mode), React content shows through. */
+              <div className="h-full flex items-center justify-center bg-ds-bg">
+                <div className="text-center space-y-2 opacity-40">
+                  <p className="text-sm text-ds-text-dim">Browser renders here</p>
+                  <p className="text-xs text-ds-text-dim">Select a slide to preview layout</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Dialogs */}

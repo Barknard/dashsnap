@@ -94,14 +94,14 @@ export function RecordingOverlay({ type }: RecordingOverlayProps) {
         >
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-ds-surface/95 border border-ds-red/30 backdrop-blur-md">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <kbd className="px-1.5 py-0.5 rounded bg-ds-emerald/20 border border-ds-emerald/40 text-ds-emerald font-mono text-[10px] font-bold">S</kbd>
-              <span className="text-[10px] text-ds-text-dim">snap</span>
-              <kbd className="px-1.5 py-0.5 rounded bg-ds-cyan/20 border border-ds-cyan/40 text-ds-cyan font-mono text-[10px] font-bold ml-1">R</kbd>
-              <span className="text-[10px] text-ds-text-dim">region</span>
-              <kbd className="px-1.5 py-0.5 rounded bg-ds-accent/20 border border-ds-accent/40 text-ds-accent font-mono text-[10px] font-bold ml-1">Enter</kbd>
-              <span className="text-[10px] text-ds-text-dim">finish</span>
-              <kbd className="px-1.5 py-0.5 rounded bg-ds-red/20 border border-ds-red/40 text-ds-red font-mono text-[10px] font-bold ml-1">Esc</kbd>
-              <span className="text-[10px] text-ds-text-dim">cancel</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-ds-emerald/20 border border-ds-emerald/40 text-ds-emerald font-mono text-xs font-bold">S</kbd>
+              <span className="text-xs text-ds-text-dim">snap</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-ds-cyan/20 border border-ds-cyan/40 text-ds-cyan font-mono text-xs font-bold ml-1">R</kbd>
+              <span className="text-xs text-ds-text-dim">region</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-ds-accent/20 border border-ds-accent/40 text-ds-accent font-mono text-xs font-bold ml-1">Enter</kbd>
+              <span className="text-xs text-ds-text-dim">finish</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-ds-red/20 border border-ds-red/40 text-ds-red font-mono text-xs font-bold ml-1">Esc</kbd>
+              <span className="text-xs text-ds-text-dim">cancel</span>
             </div>
           </div>
         </motion.div>

@@ -6,6 +6,8 @@ import {
   dialog,
   shell,
   session,
+  protocol,
+  net,
 } from 'electron';
 import path from 'path';
 import fs from 'fs';
@@ -29,7 +31,9 @@ let flowRunner: FlowRunner;
 let pptxBuilder: PptxBuilder;
 
 const SIDEBAR_DEFAULT_WIDTH = 380;
+const TOOLBAR_HEIGHT = 44;
 let sidebarWidth = SIDEBAR_DEFAULT_WIDTH;
+let browserViewHidden = false;
 
 const isDev = !app.isPackaged && process.env.NODE_ENV === 'development';
 
@@ -47,6 +51,12 @@ process.on('uncaughtException', (err) => {
 
 app.commandLine.appendSwitch('disable-gpu-cache');
 app.commandLine.appendSwitch('disable-software-rasterizer');
+
+// ─── Register dsfile:// protocol for serving local images to renderer ───────
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'dsfile', privileges: { bypassCSP: true, stream: true, supportFetchAPI: true } },
+]);
 
 // ─── Single instance lock ───────────────────────────────────────────────────
 
@@ -265,12 +275,17 @@ function createWindow() {
 
 function positionBrowserView() {
   if (!mainWindow || !browserView) return;
+  if (browserViewHidden) {
+    // Move off-screen when hidden so React content underneath is visible
+    browserView.setBounds({ x: -9999, y: -9999, width: 0, height: 0 });
+    return;
+  }
   const [width, height] = mainWindow.getContentSize();
   browserView.setBounds({
     x: sidebarWidth,
-    y: 0,
+    y: TOOLBAR_HEIGHT,
     width: Math.max(0, width - sidebarWidth),
-    height,
+    height: Math.max(0, height - TOOLBAR_HEIGHT),
   });
 }
 
@@ -283,6 +298,14 @@ function setupIPC() {
   ipcMain.on('browser:forward', () => browserManager?.forward());
   ipcMain.on('browser:reload', () => browserManager?.reload());
   ipcMain.handle('browser:get-url', () => browserManager?.getUrl() || '');
+  ipcMain.on('browser:hide', () => {
+    browserViewHidden = true;
+    positionBrowserView();
+  });
+  ipcMain.on('browser:show', () => {
+    browserViewHidden = false;
+    positionBrowserView();
+  });
 
   // Element highlight in BrowserView
   ipcMain.on('browser:highlight-element', (_e, selector: string) => {
@@ -741,6 +764,13 @@ WshShell.Run """${batchPath.replace(/\\/g, '\\\\')}""", 0, False
 
 // Show splash immediately, wait for it to paint, THEN load heavy modules
 app.whenReady().then(async () => {
+  // Handle dsfile:// protocol — serves local PNG files to the renderer
+  protocol.handle('dsfile', (request) => {
+    // dsfile:///C:/path/to/file.png → file:///C:/path/to/file.png
+    const filePath = decodeURIComponent(request.url.replace('dsfile://', 'file://'));
+    return net.fetch(filePath);
+  });
+
   await showSplash();
 
   // Yield one tick so the splash is fully visible before blocking with imports

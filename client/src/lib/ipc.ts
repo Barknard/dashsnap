@@ -65,6 +65,14 @@ export const browser = {
     if (!isElectron) return;
     window.dashsnap!.send('browser:clear-highlight');
   },
+  hide: () => {
+    if (!isElectron) return;
+    window.dashsnap!.send('browser:hide');
+  },
+  show: () => {
+    if (!isElectron) return;
+    window.dashsnap!.send('browser:show');
+  },
 };
 
 // ─── Recorder ───────────────────────────────────────────────────────────────

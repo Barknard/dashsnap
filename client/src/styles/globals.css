@@ -1,29 +1,32 @@
 @import "tailwindcss";
 
 @theme {
-  /* Warm charcoal-indigo dark theme */
-  --color-ds-bg: #13111C;
-  --color-ds-surface: #1C1A29;
-  --color-ds-surface-hover: #262435;
-  --color-ds-border: #332F45;
-  --color-ds-border-bright: #4A4560;
-  --color-ds-text: #EEEDF5;
-  --color-ds-text-muted: #A9A5BE;
-  --color-ds-text-dim: #716D87;
-  --color-ds-accent: #7C5CFC;
-  --color-ds-accent-hover: #6A47F0;
-  --color-ds-accent-glow: rgba(124, 92, 252, 0.18);
-  --color-ds-cyan: #22D3EE;
-  --color-ds-emerald: #34D399;
-  --color-ds-amber: #FBBF24;
-  --color-ds-red: #F87171;
-  --color-ds-purple: #A78BFA;
-  --color-ds-glass: rgba(28, 26, 41, 0.85);
+  /* M2 Dark Theme — elevation via white overlay on #121212 base
+     Accent: desaturated purple (200-tone) for dark surfaces */
+  --color-ds-bg: #121212;                        /* 00dp — base background */
+  --color-ds-surface: #1E1E1E;                   /* 01dp — 5% white overlay */
+  --color-ds-surface-hover: #252525;             /* 03dp — 8% white overlay */
+  --color-ds-surface-raised: #2C2C2C;           /* 06dp — 11% white overlay */
+  --color-ds-border: #2C2C2C;                    /* 06dp — dividers match raised */
+  --color-ds-border-bright: #383838;             /* 24dp — max elevation divider */
+  --color-ds-text: rgba(255, 255, 255, 0.87);   /* High-emphasis */
+  --color-ds-text-muted: rgba(255, 255, 255, 0.60); /* Medium-emphasis */
+  --color-ds-text-dim: rgba(255, 255, 255, 0.38);   /* Disabled */
+  --color-ds-accent: #BB86FC;                    /* M2 purple 200 — primary for dark */
+  --color-ds-accent-hover: #9E69E6;             /* Slightly deeper on hover */
+  --color-ds-accent-glow: rgba(187, 134, 252, 0.18);
+  --color-ds-cyan: #03DAC6;                      /* M2 teal 200 — secondary */
+  --color-ds-emerald: #34D399;                   /* Success/run */
+  --color-ds-amber: #FBBF24;                     /* Warning/override */
+  --color-ds-red: #CF6679;                       /* M2 error for dark theme */
+  --color-ds-purple: #BB86FC;                    /* Navigation — matches accent */
+  --color-ds-glass: rgba(30, 30, 30, 0.88);     /* Glass effect at 01dp */
 }
 
-/* Sidebar width variable — used by dialogs and overlays to stay within the panel */
+/* Layout variables */
 :root {
   --sidebar-w: 380px;
+  --toolbar-h: 44px;
 }
 
 /* Bump small text sizes globally — make the app more readable */

@@ -26,6 +26,7 @@ export interface SnapStep {
   region: { x: number; y: number; width: number; height: number };
   fullPage?: boolean;
   slideLayout?: PptxLayout;
+  previewPath?: string;      // absolute path to live preview PNG captured during recording
 }
 
 export interface NavigateStep {
@@ -138,6 +139,7 @@ export interface MacroAction {
     height: number;
   };
   slideLayout?: PptxLayout;  // optional per-snap slide layout
+  previewPath?: string;      // preview screenshot captured during recording
   elementMeta?: {
     tagName: string;
     inputType?: string;      // e.g. 'text', 'search', 'email'

@@ -8,7 +8,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <App />
     <Toaster
       theme="dark"
-      position="bottom-left"
+      position="bottom-center"
       toastOptions={{
         style: {
           background: '#1e293b',

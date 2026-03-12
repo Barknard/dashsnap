@@ -45,6 +45,8 @@ interface AppStore {
   setActiveTab: (tab: 'record' | 'output') => void;
   showSettings: boolean;
   setShowSettings: (show: boolean) => void;
+  slideEditMode: boolean;
+  setSlideEditMode: (mode: boolean) => void;
 }
 
 const defaultSettings: AppSettings = {
@@ -117,4 +119,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setActiveTab: (tab) => set({ activeTab: tab }),
   showSettings: false,
   setShowSettings: (show) => set({ showSettings: show }),
+  slideEditMode: false,
+  setSlideEditMode: (mode) => set({ slideEditMode: mode }),
 }));

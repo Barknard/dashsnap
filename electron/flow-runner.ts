@@ -471,8 +471,19 @@ export class FlowRunner {
     return 'success';
   }
 
+  /** Sanitize a label into a filename-safe string */
+  private sanitizeLabel(label: string): string {
+    return label
+      .replace(/^Snap:\s*/i, '')
+      .replace(/^Snap region\s*/i, 'region_')
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .substring(0, 60) || 'capture';
+  }
+
   private async executeSnap(
-    step: { region: { x: number; y: number; width: number; height: number }; fullPage?: boolean },
+    step: { region: { x: number; y: number; width: number; height: number }; fullPage?: boolean; label?: string },
     outputDir: string,
     index: number,
   ): Promise<string | null> {
@@ -484,11 +495,12 @@ export class FlowRunner {
         height: step.region.height,
       });
 
-      // Include variable values in filename for batch runs
+      // Build meaningful filename: <sanitized-label>_<timestamp>_<index>[_vars].png
+      const safeName = this.sanitizeLabel(step.label || 'capture');
       const varSuffix = Object.keys(this.currentVariables).length > 0
         ? '_' + Object.values(this.currentVariables).join('_').replace(/[^a-zA-Z0-9_-]/g, '')
         : '';
-      const filename = `snap_${this._runTimestamp}_${String(index + 1).padStart(2, '0')}${varSuffix}.png`;
+      const filename = `${safeName}_${this._runTimestamp}_${String(index + 1).padStart(2, '0')}${varSuffix}.png`;
       const filePath = path.join(outputDir, filename);
       fs.writeFileSync(filePath, image.toPNG());
       return filePath;
@@ -882,10 +894,11 @@ export class FlowRunner {
                 width: action.snapRegion.width,
                 height: action.snapRegion.height,
               });
+              const safeName = this.sanitizeLabel(action.label || 'capture');
               const varSuffix = Object.keys(this.currentVariables).length > 0
                 ? '_' + Object.values(this.currentVariables).join('_').replace(/[^a-zA-Z0-9_-]/g, '')
                 : '';
-              const filename = `snap_${this._runTimestamp}_${String(screenshots.length + 1).padStart(2, '0')}${varSuffix}.png`;
+              const filename = `${safeName}_${this._runTimestamp}_${String(screenshots.length + 1).padStart(2, '0')}${varSuffix}.png`;
               const filePath = path.join(outputDir, filename);
               fs.writeFileSync(filePath, image.toPNG());
               screenshots.push({

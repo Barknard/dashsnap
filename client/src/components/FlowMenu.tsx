@@ -44,7 +44,7 @@ export function FlowMenu() {
           <DropdownMenu.Trigger asChild>
             <button className="flex items-center gap-1.5 px-2 py-1 rounded-md text-sm font-semibold text-ds-text hover:bg-ds-surface-hover transition-colors min-w-0">
               <span className="truncate">{activeFlow.name}</span>
-              <span className="text-xs text-ds-text-dim">({activeFlow.steps.length} steps)</span>
+              <span className="text-xs text-ds-text-dim">({activeFlow.steps.length} actions)</span>
               <ChevronDown className="w-3.5 h-3.5 text-ds-text-dim shrink-0" />
             </button>
           </DropdownMenu.Trigger>
@@ -59,7 +59,7 @@ export function FlowMenu() {
               {flows.length > 1 && (
                 <>
                   <DropdownMenu.Label className="px-2 py-1 text-xs font-semibold text-ds-text-dim uppercase tracking-wider">
-                    Switch Flow
+                    Switch Report
                   </DropdownMenu.Label>
                   {flows.map(f => (
                     <DropdownMenu.Item
@@ -83,7 +83,7 @@ export function FlowMenu() {
                 className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-surface-hover outline-none"
               >
                 <Plus className="w-3.5 h-3.5 text-ds-text-muted" />
-                New Flow
+                New Report
               </DropdownMenu.Item>
 
               <DropdownMenu.Item
@@ -99,7 +99,7 @@ export function FlowMenu() {
                 className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-surface-hover outline-none"
               >
                 <Download className="w-3.5 h-3.5 text-ds-text-muted" />
-                Export as JSON
+                Export Report
               </DropdownMenu.Item>
 
               <DropdownMenu.Item
@@ -107,7 +107,7 @@ export function FlowMenu() {
                 className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-surface-hover outline-none"
               >
                 <Upload className="w-3.5 h-3.5 text-ds-text-muted" />
-                Import Flow
+                Import Report
               </DropdownMenu.Item>
 
               <DropdownMenu.Separator className="h-px bg-ds-border my-1" />
@@ -117,7 +117,7 @@ export function FlowMenu() {
                 className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-red cursor-pointer hover:bg-ds-red/10 outline-none"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                Delete Flow
+                Delete Report
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
@@ -130,17 +130,17 @@ export function FlowMenu() {
           <Dialog.Overlay className="fixed top-0 left-0 bottom-0 w-[var(--sidebar-w,380px)] bg-black/60 z-50" />
           <Dialog.Content className="fixed top-1/2 left-[calc(var(--sidebar-w,380px)/2)] -translate-x-1/2 -translate-y-1/2 w-[340px] bg-ds-surface border border-ds-border rounded-xl p-5 z-50 shadow-2xl">
             <Dialog.Title className="text-sm font-bold text-ds-text mb-1">
-              Create New Flow
+              Create New Report
             </Dialog.Title>
             <Dialog.Description className="text-xs text-ds-text-dim mb-4">
-              Give your flow a name that describes its purpose.
+              Give your report a name that describes its purpose.
             </Dialog.Description>
             <Input
               icon={<FileText className="w-3.5 h-3.5" />}
               value={newFlowName}
               onChange={e => setNewFlowName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleCreate()}
-              placeholder="e.g., Visier Attrition by Quarter"
+              placeholder="e.g., Weekly Revenue Report"
               autoFocus
             />
             <div className="flex justify-end gap-2 mt-4">
@@ -161,10 +161,10 @@ export function FlowMenu() {
           <AlertDialog.Overlay className="fixed top-0 left-0 bottom-0 w-[var(--sidebar-w,380px)] bg-black/60 z-50" />
           <AlertDialog.Content className="fixed top-1/2 left-[calc(var(--sidebar-w,380px)/2)] -translate-x-1/2 -translate-y-1/2 w-[340px] bg-ds-surface border border-ds-border rounded-xl p-5 z-50 shadow-2xl">
             <AlertDialog.Title className="text-sm font-bold text-ds-text mb-1">
-              Delete Flow
+              Delete Report
             </AlertDialog.Title>
             <AlertDialog.Description className="text-xs text-ds-text-dim mb-4">
-              Are you sure you want to delete "{activeFlow?.name}"? This cannot be undone.
+              Are you sure you want to delete &ldquo;{activeFlow?.name}&rdquo;? This cannot be undone.
             </AlertDialog.Description>
             <div className="flex justify-end gap-2">
               <AlertDialog.Cancel asChild>

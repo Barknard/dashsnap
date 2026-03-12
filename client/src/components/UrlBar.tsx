@@ -5,10 +5,9 @@ import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
 import { browser } from '@/lib/ipc';
 import { useAppStore } from '@/stores/appStore';
+import { useFlowStore } from '@/stores/flowStore';
 import { cn } from '@/lib/utils';
 import type { Bookmark } from '@shared/types';
-
-// UrlBar also imports browser title for bookmark naming (Fix #11)
 
 export function UrlBar() {
   const browserUrl = useAppStore(s => s.browserUrl);
@@ -39,7 +38,6 @@ export function UrlBar() {
     return () => browser.offUrlChanged(handler);
   }, [setBrowserUrl]);
 
-  // Fix #10: Timeout for isLoading on navigation failure
   useEffect(() => {
     if (!isLoading) return;
     const timeout = setTimeout(() => setIsLoading(false), 15000);
@@ -66,7 +64,6 @@ export function UrlBar() {
   };
 
   const isBookmarked = bookmarks.some(b => b.url === browserUrl);
-
   const browserTitle = useAppStore(s => s.browserTitle);
 
   const toggleBookmark = () => {
@@ -75,7 +72,6 @@ export function UrlBar() {
     } else {
       const url = browserUrl;
       if (!url || url === 'about:blank') return;
-      // Fix #11: Use page <title> for bookmark name instead of hostname
       let name: string;
       if (browserTitle && browserTitle.trim()) {
         name = browserTitle.trim().slice(0, 60);
@@ -114,9 +110,12 @@ export function UrlBar() {
   };
 
   const isBlank = !browserUrl || browserUrl === 'about:blank';
+  const hasActiveFlow = !!useFlowStore(s => s.activeFlowId);
+  const activeFlowSteps = useFlowStore(s => s.getActiveFlow()?.steps.length ?? 0);
+  const needsAttention = isBlank && hasActiveFlow && activeFlowSteps === 0;
 
   return (
-    <div className="flex items-center gap-1.5 px-3 py-2 border-b border-ds-border bg-ds-surface/80">
+    <div className="flex-1 flex items-center gap-1.5 px-2">
       <Tooltip content="Back">
         <Button variant="ghost" size="icon-sm" onClick={() => browser.back()}>
           <ChevronLeft className="w-4 h-4" />
@@ -136,10 +135,12 @@ export function UrlBar() {
       <div className={cn(
         'flex-1 relative flex items-center rounded-lg border-2 transition-all duration-200',
         isFocused
-          ? 'border-ds-accent bg-ds-bg shadow-[0_0_12px_rgba(59,130,246,0.2)]'
-          : isBlank
-            ? 'border-ds-accent/40 bg-ds-accent/[0.06]'
-            : 'border-ds-border bg-ds-surface-hover',
+          ? 'border-ds-accent bg-ds-bg shadow-[0_0_12px_rgba(187,134,252,0.25)]'
+          : needsAttention
+            ? 'border-ds-accent/60 bg-ds-accent/8 shadow-[0_0_8px_rgba(187,134,252,0.15)] animate-pulse'
+            : isBlank
+              ? 'border-ds-accent/40 bg-ds-accent/[0.06]'
+              : 'border-ds-border bg-ds-surface-hover',
       )}>
         <Globe className={cn(
           'absolute left-2.5 w-3.5 h-3.5 pointer-events-none',
@@ -153,9 +154,9 @@ export function UrlBar() {
           onKeyDown={handleKeyDown}
           onFocus={() => { setIsFocused(true); inputRef.current?.select(); }}
           onBlur={() => setIsFocused(false)}
-          placeholder={isBlank ? 'Navigate to a website to start recording...' : 'Enter URL or search...'}
+          placeholder={needsAttention ? 'Paste your dashboard URL here to get started...' : isBlank ? 'Enter URL...' : 'Enter URL or search...'}
           className={cn(
-            'w-full h-8 pl-8 pr-3 text-xs bg-transparent focus:outline-none font-mono',
+            'w-full h-7 pl-8 pr-3 text-xs bg-transparent focus:outline-none font-mono',
             isBlank ? 'text-ds-text-dim placeholder:text-ds-accent/50' : 'text-ds-text placeholder:text-ds-text-dim',
           )}
           spellCheck={false}
@@ -167,7 +168,7 @@ export function UrlBar() {
         )}
       </div>
 
-      {/* Bookmark star — toggles current page */}
+      {/* Bookmark star */}
       <Tooltip content={isBookmarked ? 'Remove bookmark' : 'Bookmark this page'}>
         <Button
           variant="ghost"
@@ -179,19 +180,18 @@ export function UrlBar() {
         </Button>
       </Tooltip>
 
-      {/* Bookmarks picker dropdown */}
+      {/* Bookmarks picker */}
       <DropdownMenu.Root onOpenChange={(open) => { if (!open) setEditingIndex(null); }}>
         <DropdownMenu.Trigger asChild>
           <Button variant="ghost" size="icon-sm" className="relative" title="Bookmarks">
             <BookmarkIcon className="w-3.5 h-3.5" />
             {bookmarks.length > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-ds-accent text-[9px] font-bold text-white leading-none px-0.5">
+              <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] flex items-center justify-center rounded-full bg-ds-accent text-xs font-bold text-white leading-none px-0.5">
                 {bookmarks.length}
               </span>
             )}
           </Button>
         </DropdownMenu.Trigger>
-
         <DropdownMenu.Portal>
           <DropdownMenu.Content
             className="z-50 min-w-[220px] max-w-[340px] rounded-lg border border-ds-border bg-ds-surface shadow-xl p-1"
@@ -205,7 +205,7 @@ export function UrlBar() {
               <div className="px-3 py-4 text-center">
                 <Star className="w-5 h-5 text-ds-text-dim/40 mx-auto mb-1.5" />
                 <p className="text-xs text-ds-text-dim">No bookmarks yet</p>
-                <p className="text-[10px] text-ds-text-dim/60 mt-0.5">Click the star to save the current page</p>
+                <p className="text-xs text-ds-text-dim/60 mt-0.5">Click the star to save the current page</p>
               </div>
             ) : (
               bookmarks.map((bm, i) => (
@@ -221,10 +221,7 @@ export function UrlBar() {
                       onChange={e => setEditName(e.target.value)}
                       className="flex-1 h-6 px-1.5 text-xs bg-ds-bg border border-ds-border rounded text-ds-text outline-none focus:border-ds-accent"
                     />
-                    <button
-                      onClick={saveEdit}
-                      className="p-0.5 rounded hover:bg-ds-emerald/10 text-ds-emerald"
-                    >
+                    <button onClick={saveEdit} className="p-0.5 rounded hover:bg-ds-emerald/10 text-ds-emerald">
                       <Check className="w-3 h-3" />
                     </button>
                   </div>
@@ -237,7 +234,7 @@ export function UrlBar() {
                     <Globe className="w-3 h-3 text-ds-text-dim shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium truncate">{bm.name}</p>
-                      <p className="text-[10px] text-ds-text-dim truncate">{bm.url}</p>
+                      <p className="text-xs text-ds-text-dim truncate">{bm.url}</p>
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); e.preventDefault(); startEditing(i); }}

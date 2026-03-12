@@ -1,4 +1,6 @@
-import { BrowserView, BrowserWindow } from 'electron';
+import { BrowserView, BrowserWindow, app } from 'electron';
+import path from 'path';
+import fs from 'fs';
 
 const CLICK_OVERLAY_JS = `
 (function() {
@@ -1077,11 +1079,48 @@ export class Recorder {
   private _macroNavHandler: (() => void) | null = null;
   private _macroConsoleHandler: ((_e: Electron.Event, level: number, message: string) => void) | null = null;
   private _macroStartUrl: string = '';
-  private _macroAccumulatedActions: unknown[] = [];
+  private _macroAccumulatedActions: Record<string, unknown>[] = [];
+  private _previewDir: string;
+  private _previewCounter = 0;
 
   constructor(view: BrowserView, window: BrowserWindow) {
     this.view = view;
     this.window = window;
+    this._previewDir = path.join(app.getPath('temp'), 'dashsnap-previews');
+    if (!fs.existsSync(this._previewDir)) fs.mkdirSync(this._previewDir, { recursive: true });
+  }
+
+  /** Sanitize a label into a filename-safe string */
+  private sanitizeLabel(label: string): string {
+    return label
+      .replace(/^Snap:\s*/i, '')
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .substring(0, 60) || 'capture';
+  }
+
+  /** Capture a preview screenshot for a snap action during macro recording */
+  private async capturePreview(action: Record<string, unknown>): Promise<void> {
+    const region = action.snapRegion as { x: number; y: number; width: number; height: number } | undefined;
+    if (!region || region.width <= 0 || region.height <= 0) return;
+    try {
+      const image = await this.view.webContents.capturePage({
+        x: region.x,
+        y: region.y,
+        width: region.width,
+        height: region.height,
+      });
+      this._previewCounter++;
+      const safeName = this.sanitizeLabel(String(action.label || 'capture'));
+      const filename = `preview_${safeName}_${this._previewCounter}.png`;
+      const filePath = path.join(this._previewDir, filename);
+      fs.writeFileSync(filePath, image.toPNG());
+      action.previewPath = filePath;
+      console.log('[Macro] Preview captured:', filePath);
+    } catch (err) {
+      console.error('[Macro] Preview capture failed:', err);
+    }
   }
 
   /** Start element-picker recording (used by click, snap, hover, select, type, scroll-element) */
@@ -1108,6 +1147,7 @@ export class Recorder {
     this.stopPolling();
     this._macroStartUrl = this.view.webContents.getURL();
     this._macroAccumulatedActions = [];
+    this._previewCounter = 0;
     await this.view.webContents.executeJavaScript(MACRO_OVERLAY_JS);
 
     // Real-time action capture via console.log — catches actions even if navigation
@@ -1116,11 +1156,14 @@ export class Recorder {
       if (message.startsWith('__DASHSNAP_ACTION__')) {
         try {
           const action = JSON.parse(message.substring('__DASHSNAP_ACTION__'.length));
-          // Simply append — the page-side dedup already prevents true duplicates.
-          // Using length-based sync: only append if this would be a new entry.
           const pageCount = this._macroAccumulatedActions.length;
           this._macroAccumulatedActions.push(action);
           console.log('[Macro] Real-time capture #' + (pageCount + 1) + ':', action.action, action.label, '| selector:', action.selector || 'none');
+
+          // For snap actions, capture a live preview screenshot immediately
+          if (action.action === 'snap' && action.snapRegion) {
+            this.capturePreview(action);
+          }
         } catch { /* parse error, ignore */ }
       }
     };

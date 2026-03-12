@@ -10,6 +10,7 @@ import {
   Timer, SkipForward,
 } from 'lucide-react';
 import { type FlowStep, type PptxLayout, type RunStepStatus, type SnapStep } from '@shared/types';
+import { SlideLayoutPreview } from './SlideLayoutPreview';
 import { Badge, stepTypeBadgeVariant } from './ui/Badge';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -47,7 +48,7 @@ function StepCountdown({ stepWaitSeconds }: { stepWaitSeconds: number }) {
           transition={{ duration: 0.3 }}
         />
       </div>
-      <span className="text-[10px] font-mono font-bold text-ds-accent tabular-nums w-6 text-right">
+      <span className="text-xs font-mono font-bold text-ds-accent tabular-nums w-6 text-right">
         {remaining > 0 ? `${remaining}s` : <Timer className="w-2.5 h-2.5 inline animate-spin" />}
       </span>
     </div>
@@ -265,7 +266,7 @@ export function StepList({ onEditStep }: StepListProps) {
           const isExpanded = isSnap && expandedSnapId === step.id;
           const snapStep = isSnap ? step as SnapStep : null;
 
-          const updateSnapLayout = (field: string, value: number | boolean | string) => {
+          const updateSnapLayout = (updates: Record<string, number | boolean | string>) => {
             if (!snapStep) return;
             const cur = snapStep.slideLayout;
             const defaults = {
@@ -278,7 +279,7 @@ export function StepList({ onEditStep }: StepListProps) {
               fitMode: globalLayout?.fitMode ?? 'contain' as const,
             };
             updateStep(step.id, {
-              slideLayout: { ...defaults, ...cur, [field]: value },
+              slideLayout: { ...defaults, ...cur, ...updates },
             } as Partial<FlowStep>);
           };
 
@@ -303,7 +304,7 @@ export function StepList({ onEditStep }: StepListProps) {
                       : <ChevronDown className="w-3 h-3 text-ds-accent" />
                     }
                     <Clapperboard className="w-3 h-3 text-ds-accent" />
-                    <span className="text-[10px] font-bold text-ds-accent uppercase tracking-wider">
+                    <span className="text-xs font-bold text-ds-accent uppercase tracking-wider">
                       Recording Session
                       {isCollapsed && <span className="text-ds-text-dim font-normal ml-1">({groupStepCount} steps)</span>}
                     </span>
@@ -389,10 +390,11 @@ export function StepList({ onEditStep }: StepListProps) {
                               updateStep(step.id, { waitOverride: clamped } as Partial<FlowStep>);
                             }
                           }}
-                          className="w-8 h-4 px-0.5 text-[10px] font-mono text-center bg-ds-bg border border-ds-border rounded focus:outline-none focus:border-ds-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none text-ds-text-muted"
+                          onFocus={(e) => e.target.select()}
+                          className="w-8 h-4 px-0.5 text-xs font-mono text-center bg-ds-bg border border-ds-border rounded focus:outline-none focus:border-ds-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none text-ds-text-muted"
                           title="Wait time for this step (seconds)"
                         />
-                        <span className="text-[9px] text-ds-text-dim">s</span>
+                        <span className="text-xs text-ds-text-dim">s</span>
                       </span>
                     )}
                   </div>
@@ -455,47 +457,60 @@ export function StepList({ onEditStep }: StepListProps) {
                         {hasCustomLayout && (
                           <button
                             onClick={clearSnapLayout}
-                            className="text-[10px] text-ds-text-dim hover:text-ds-red transition-colors"
+                            className="text-xs text-ds-text-dim hover:text-ds-red transition-colors"
                           >
                             Reset to global
                           </button>
                         )}
                       </div>
-                      <p className="text-[10px] text-ds-text-dim">
-                        Set image position and size on this slide (inches). Slide is 13.33 x 7.5 in.
-                      </p>
 
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {([
-                          ['imageX', 'X Pos', 0.3],
-                          ['imageY', 'Y Pos', 0.8],
-                          ['imageW', 'Width', 12.7],
-                          ['imageH', 'Height', 6.2],
-                        ] as const).map(([field, label, fallback]) => (
-                          <div key={field} className="space-y-0.5">
-                            <span className="text-[9px] text-ds-text-dim uppercase tracking-wide">{label}</span>
-                            <Input
-                              type="number"
-                              step="0.1"
-                              value={sl?.[field] ?? globalLayout?.[field] ?? fallback}
-                              onChange={e => updateSnapLayout(field, parseFloat(e.target.value) || 0)}
-                              className="font-mono text-xs h-7"
-                            />
-                          </div>
-                        ))}
-                      </div>
+                      {/* Visual slide preview with drag-to-place */}
+                      <SlideLayoutPreview
+                        layout={{
+                          imageX: sl?.imageX ?? globalLayout?.imageX ?? 0.3,
+                          imageY: sl?.imageY ?? globalLayout?.imageY ?? 0.8,
+                          imageW: sl?.imageW ?? globalLayout?.imageW ?? 12.7,
+                          imageH: sl?.imageH ?? globalLayout?.imageH ?? 6.2,
+                          showHeader: sl?.showHeader ?? globalLayout?.showHeader ?? true,
+                          showFooter: sl?.showFooter ?? globalLayout?.showFooter ?? true,
+                          fitMode: sl?.fitMode ?? globalLayout?.fitMode ?? 'contain',
+                          cropTop: sl?.cropTop ?? globalLayout?.cropTop ?? 0,
+                          cropRight: sl?.cropRight ?? globalLayout?.cropRight ?? 0,
+                          cropBottom: sl?.cropBottom ?? globalLayout?.cropBottom ?? 0,
+                          cropLeft: sl?.cropLeft ?? globalLayout?.cropLeft ?? 0,
+                        }}
+                        onChange={updateSnapLayout}
+                        onPreset={(preset) => {
+                          const defaults = {
+                            imageX: globalLayout?.imageX ?? 0.3,
+                            imageY: globalLayout?.imageY ?? 0.8,
+                            imageW: globalLayout?.imageW ?? 12.7,
+                            imageH: globalLayout?.imageH ?? 6.2,
+                            showHeader: globalLayout?.showHeader ?? true,
+                            showFooter: globalLayout?.showFooter ?? true,
+                            fitMode: globalLayout?.fitMode ?? 'contain' as const,
+                            cropTop: 0,
+                            cropRight: 0,
+                            cropBottom: 0,
+                            cropLeft: 0,
+                          };
+                          updateStep(step.id, {
+                            slideLayout: { ...defaults, ...preset },
+                          } as Partial<FlowStep>);
+                        }}
+                      />
 
                       {/* Fit mode */}
                       <div className="space-y-1">
-                        <span className="text-[9px] text-ds-text-dim uppercase tracking-wide flex items-center gap-1">
+                        <span className="text-xs text-ds-text-dim uppercase tracking-wide flex items-center gap-1">
                           <Maximize2 className="w-2 h-2" /> Fit Mode
                         </span>
                         <div className="flex gap-1">
                           {(['contain', 'fill', 'stretch'] as const).map(mode => (
                             <button
                               key={mode}
-                              onClick={() => updateSnapLayout('fitMode', mode)}
-                              className={`flex-1 px-1.5 py-1 text-[10px] rounded border transition-colors capitalize ${
+                              onClick={() => updateSnapLayout({ fitMode: mode })}
+                              className={`flex-1 px-1.5 py-1 text-xs rounded border transition-colors capitalize ${
                                 (sl?.fitMode ?? globalLayout?.fitMode ?? 'contain') === mode
                                   ? 'bg-ds-accent/20 border-ds-accent text-ds-accent'
                                   : 'bg-ds-bg border-ds-border text-ds-text-muted hover:text-ds-text'
@@ -507,71 +522,33 @@ export function StepList({ onEditStep }: StepListProps) {
                         </div>
                       </div>
 
-                      {/* Header / Footer */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-ds-text">Header</span>
-                        <Switch.Root
-                          checked={sl?.showHeader ?? globalLayout?.showHeader ?? true}
-                          onCheckedChange={v => updateSnapLayout('showHeader', v)}
-                          className="w-7 h-4 rounded-full bg-ds-bg border border-ds-border data-[state=checked]:bg-ds-accent transition-colors"
-                        >
-                          <Switch.Thumb className="block w-3 h-3 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-3 translate-x-0.5" />
-                        </Switch.Root>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-ds-text">Footer</span>
-                        <Switch.Root
-                          checked={sl?.showFooter ?? globalLayout?.showFooter ?? true}
-                          onCheckedChange={v => updateSnapLayout('showFooter', v)}
-                          className="w-7 h-4 rounded-full bg-ds-bg border border-ds-border data-[state=checked]:bg-ds-accent transition-colors"
-                        >
-                          <Switch.Thumb className="block w-3 h-3 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-3 translate-x-0.5" />
-                        </Switch.Root>
+                      {/* Header / Footer toggles */}
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <Switch.Root
+                            checked={sl?.showHeader ?? globalLayout?.showHeader ?? true}
+                            onCheckedChange={v => updateSnapLayout({ showHeader: v })}
+                            className="w-7 h-4 rounded-full bg-ds-bg border border-ds-border data-[state=checked]:bg-ds-accent transition-colors"
+                          >
+                            <Switch.Thumb className="block w-3 h-3 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-3 translate-x-0.5" />
+                          </Switch.Root>
+                          <span className="text-xs text-ds-text">Header</span>
+                        </label>
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <Switch.Root
+                            checked={sl?.showFooter ?? globalLayout?.showFooter ?? true}
+                            onCheckedChange={v => updateSnapLayout({ showFooter: v })}
+                            className="w-7 h-4 rounded-full bg-ds-bg border border-ds-border data-[state=checked]:bg-ds-accent transition-colors"
+                          >
+                            <Switch.Thumb className="block w-3 h-3 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-3 translate-x-0.5" />
+                          </Switch.Root>
+                          <span className="text-xs text-ds-text">Footer</span>
+                        </label>
                       </div>
 
                       {/* Crop */}
                       <div className="space-y-1.5 pt-1 border-t border-ds-border/30">
-                        <span className="text-[9px] text-ds-text-dim uppercase tracking-wide">Crop (%)</span>
-
-                        {/* Live preview */}
-                        {(() => {
-                          const ct = sl?.cropTop ?? globalLayout?.cropTop ?? 0;
-                          const cr = sl?.cropRight ?? globalLayout?.cropRight ?? 0;
-                          const cb = sl?.cropBottom ?? globalLayout?.cropBottom ?? 0;
-                          const cl = sl?.cropLeft ?? globalLayout?.cropLeft ?? 0;
-                          const hasCrop = ct > 0 || cr > 0 || cb > 0 || cl > 0;
-                          return (
-                            <div className="relative w-full h-20 rounded bg-ds-bg border border-ds-border overflow-hidden">
-                              {/* Full image area */}
-                              <div className="absolute inset-0 bg-ds-accent/5" />
-                              {/* Visible area after crop */}
-                              <div
-                                className="absolute bg-ds-accent/20 border border-ds-accent/40 transition-all duration-200"
-                                style={{
-                                  top: `${ct}%`,
-                                  right: `${cr}%`,
-                                  bottom: `${cb}%`,
-                                  left: `${cl}%`,
-                                }}
-                              />
-                              {/* Crop overlay dimming */}
-                              {hasCrop && (
-                                <>
-                                  {ct > 0 && <div className="absolute top-0 left-0 right-0 bg-ds-red/15 transition-all duration-200" style={{ height: `${ct}%` }} />}
-                                  {cb > 0 && <div className="absolute bottom-0 left-0 right-0 bg-ds-red/15 transition-all duration-200" style={{ height: `${cb}%` }} />}
-                                  {cl > 0 && <div className="absolute left-0 bg-ds-red/15 transition-all duration-200" style={{ top: `${ct}%`, bottom: `${cb}%`, width: `${cl}%` }} />}
-                                  {cr > 0 && <div className="absolute right-0 bg-ds-red/15 transition-all duration-200" style={{ top: `${ct}%`, bottom: `${cb}%`, width: `${cr}%` }} />}
-                                </>
-                              )}
-                              {/* Labels */}
-                              <span className="absolute top-0.5 left-1/2 -translate-x-1/2 text-[8px] text-ds-text-dim">{ct}%</span>
-                              <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 text-[8px] text-ds-text-dim">{cb}%</span>
-                              <span className="absolute left-0.5 top-1/2 -translate-y-1/2 text-[8px] text-ds-text-dim">{cl}%</span>
-                              <span className="absolute right-0.5 top-1/2 -translate-y-1/2 text-[8px] text-ds-text-dim">{cr}%</span>
-                            </div>
-                          );
-                        })()}
-
+                        <span className="text-xs text-ds-text-dim uppercase tracking-wide">Crop (%)</span>
                         <div className="grid grid-cols-4 gap-1">
                           {([
                             ['cropTop', 'Top'],
@@ -580,15 +557,15 @@ export function StepList({ onEditStep }: StepListProps) {
                             ['cropLeft', 'Left'],
                           ] as const).map(([field, label]) => (
                             <div key={field} className="space-y-0.5">
-                              <span className="text-[8px] text-ds-text-dim uppercase">{label}</span>
+                              <span className="text-xs text-ds-text-dim uppercase">{label}</span>
                               <Input
                                 type="number"
                                 min="0"
                                 max="50"
                                 step="1"
                                 value={sl?.[field] ?? globalLayout?.[field] ?? 0}
-                                onChange={e => updateSnapLayout(field, Math.min(50, Math.max(0, parseInt(e.target.value) || 0)))}
-                                className="font-mono text-[10px] h-6 px-1 text-center"
+                                onChange={e => updateSnapLayout({ [field]: Math.min(50, Math.max(0, parseInt(e.target.value) || 0)) })}
+                                className="font-mono text-xs h-6 px-1 text-center"
                               />
                             </div>
                           ))}
@@ -624,7 +601,10 @@ export function StepList({ onEditStep }: StepListProps) {
                   size="sm"
                   className="bg-ds-red hover:bg-ds-red/80 text-white"
                   onClick={() => {
-                    if (deleteStepId) removeStep(deleteStepId);
+                    if (deleteStepId) {
+                      if (expandedSnapId === deleteStepId) setExpandedSnapId(null);
+                      removeStep(deleteStepId);
+                    }
                     setDeleteStepId(null);
                   }}
                 >
@@ -659,8 +639,11 @@ export function StepList({ onEditStep }: StepListProps) {
                   onClick={() => {
                     if (deleteGroupId) {
                       removeGroup(deleteGroupId);
-                      collapsedGroups.delete(deleteGroupId);
-                      setCollapsedGroups(new Set(collapsedGroups));
+                      setCollapsedGroups(prev => {
+                        const next = new Set(prev);
+                        next.delete(deleteGroupId);
+                        return next;
+                      });
                     }
                     setDeleteGroupId(null);
                   }}
