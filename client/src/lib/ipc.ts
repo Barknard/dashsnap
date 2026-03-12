@@ -289,9 +289,9 @@ export const app = {
     if (!isElectron) return;
     window.dashsnap!.send('app:download-update');
   },
-  applyUpdate: (downloadedPath: string) => {
+  applyUpdate: () => {
     if (!isElectron) return;
-    window.dashsnap!.send('app:apply-update', downloadedPath);
+    window.dashsnap!.send('app:apply-update');
   },
   onUpdateChecking: (cb: () => void) => {
     if (!isElectron) return;

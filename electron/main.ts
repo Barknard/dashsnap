@@ -311,8 +311,9 @@ function setupIPC() {
   // Element highlight in BrowserView
   ipcMain.on('browser:highlight-element', (_e, selector: string) => {
     if (!browserView) return;
+    // Use JSON.stringify to safely escape the selector string (prevents JS injection)
     browserView.webContents.executeJavaScript(`
-      (function() {
+      (function(sel) {
         let h = document.getElementById('__dashsnap_step_highlight');
         if (!h) {
           h = document.createElement('div');
@@ -320,7 +321,6 @@ function setupIPC() {
           h.style.cssText = 'position:fixed;z-index:2147483645;border:2px solid #7C5CFC;background:rgba(124,92,252,0.12);border-radius:3px;pointer-events:none;transition:all 0.15s ease;';
           document.body.appendChild(h);
         }
-        const sel = '${selector.replace(/'/g, "\\'")}';
         const el = sel ? document.querySelector(sel) : null;
         if (el) {
           const r = el.getBoundingClientRect();
@@ -332,7 +332,7 @@ function setupIPC() {
         } else {
           h.style.display = 'none';
         }
-      })()
+      })(${JSON.stringify(selector)})
     `).catch(() => {});
   });
   ipcMain.on('browser:clear-highlight', () => {
@@ -446,6 +446,11 @@ function setupIPC() {
   });
   ipcMain.handle('template:enumerate', async (_e, templatePath: string) => {
     try {
+      // Only allow .pptx files
+      if (!templatePath || !templatePath.toLowerCase().endsWith('.pptx')) {
+        console.warn('[Security] Blocked template enumerate for non-pptx file:', templatePath);
+        return [];
+      }
       const { enumerateTemplateSlides } = await import('./template-reader');
       return await enumerateTemplateSlides(templatePath);
     } catch (err) {
@@ -483,17 +488,38 @@ function setupIPC() {
   ipcMain.on('app:download-update', () => {
     downloadGitHubUpdate();
   });
-  ipcMain.on('app:apply-update', (_e, downloadedPath: string) => {
-    applyPortableUpdate(downloadedPath);
-  });
-  ipcMain.handle('app:open-path', (_e, filePath: string) => {
-    if (filePath) {
-      shell.openPath(filePath);
+  ipcMain.on('app:apply-update', () => {
+    // Use the path stored by main process during download — never accept from renderer
+    if (pendingUpdatePath) {
+      applyPortableUpdate(pendingUpdatePath);
     } else {
-      shell.openPath(path.join(getAppDataPath(), 'output'));
+      mainWindow?.webContents.send('app:update-error', 'No downloaded update available');
     }
   });
-  ipcMain.handle('app:open-external', (_e, url: string) => shell.openExternal(url));
+  ipcMain.handle('app:open-path', (_e, filePath: string) => {
+    const outputDir = path.resolve(
+      configManager?.loadSettings()?.outputPath || path.join(getAppDataPath(), 'output')
+    );
+    if (filePath) {
+      // Only allow opening files within the output directory
+      const resolved = path.resolve(filePath);
+      if (!resolved.startsWith(outputDir)) {
+        console.warn('[Security] Blocked openPath outside output dir:', resolved);
+        return;
+      }
+      shell.openPath(resolved);
+    } else {
+      shell.openPath(outputDir);
+    }
+  });
+  ipcMain.handle('app:open-external', (_e, url: string) => {
+    // Only allow https:// URLs to prevent local file access via file:// or other schemes
+    if (!url.startsWith('https://')) {
+      console.warn('[Security] Blocked openExternal for non-https URL:', url);
+      return;
+    }
+    shell.openExternal(url);
+  });
 
   // List output files (screenshots + pptx)
   ipcMain.handle('app:list-outputs', () => {
@@ -580,6 +606,7 @@ function setupAutoUpdater() {
 let pendingDownloadUrl: string | null = null;
 let pendingDownloadFilename: string | null = null;
 let pendingDownloadVersion: string | null = null;
+let pendingUpdatePath: string | null = null;  // Set by main process only — never from renderer
 
 async function checkGitHubRelease() {
   try {
@@ -656,12 +683,21 @@ async function downloadGitHubUpdate() {
       https.get(url, {
         headers: { 'User-Agent': 'DashSnap/' + app.getVersion() },
       }, (res) => {
-        // Follow redirects (GitHub uses 302)
+        // Follow redirects (GitHub uses 302) — only to trusted hosts
         if (res.statusCode === 301 || res.statusCode === 302) {
           const redirectUrl = res.headers.location;
-          if (redirectUrl) {
-            download(redirectUrl);
-            return;
+          if (redirectUrl && redirectUrl.startsWith('https://')) {
+            try {
+              const redirectHost = new URL(redirectUrl).hostname;
+              const trusted = redirectHost.endsWith('.github.com') ||
+                redirectHost.endsWith('.githubusercontent.com') ||
+                redirectHost === 'github.com';
+              if (trusted) {
+                download(redirectUrl);
+                return;
+              }
+            } catch { /* invalid URL — fall through */ }
+            console.warn('[Security] Blocked untrusted redirect:', redirectUrl);
           }
         }
 
@@ -690,6 +726,7 @@ async function downloadGitHubUpdate() {
 
         res.on('end', () => {
           fileStream.end();
+          pendingUpdatePath = savePath;  // Store in main process for safe apply
           mainWindow?.webContents.send('app:update-download-complete', savePath);
         });
 
@@ -776,9 +813,21 @@ WshShell.Run """${batchPath.replace(/\\/g, '\\\\')}""", 0, False
 app.whenReady().then(async () => {
   // Handle dsfile:// protocol — serves local PNG files to the renderer
   protocol.handle('dsfile', (request) => {
-    // dsfile:///C:/path/to/file.png → file:///C:/path/to/file.png
-    const filePath = decodeURIComponent(request.url.replace('dsfile://', 'file://'));
-    return net.fetch(filePath);
+    // dsfile:///C:/path/to/file.png → local file path
+    const rawPath = decodeURIComponent(request.url.replace('dsfile://', ''));
+    // Strip leading slash for Windows paths (e.g., /C:/Users → C:/Users)
+    const localPath = path.resolve(rawPath.replace(/^\/([a-zA-Z]:)/, '$1'));
+
+    // Restrict to output directory to prevent arbitrary file access
+    const outputDir = path.resolve(
+      configManager?.loadSettings()?.outputPath || path.join(getAppDataPath(), 'output')
+    );
+    if (!localPath.startsWith(outputDir)) {
+      console.warn('[Security] Blocked dsfile:// access outside output dir:', localPath);
+      return new Response('Forbidden', { status: 403 });
+    }
+
+    return net.fetch(`file://${localPath}`);
   });
 
   await showSplash();

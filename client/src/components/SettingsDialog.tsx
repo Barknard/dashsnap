@@ -383,7 +383,7 @@ export function SettingsDialog() {
                     <Button
                       size="sm"
                       className="w-full"
-                      onClick={() => appIpc.applyUpdate(updateDownloadPath)}
+                      onClick={() => appIpc.applyUpdate()}
                     >
                       <RotateCw className="w-3.5 h-3.5 mr-1.5" />
                       Apply Update &amp; Restart

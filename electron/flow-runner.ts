@@ -287,7 +287,7 @@ export class FlowRunner {
 
         case 'SCROLL':
           await this.view.webContents.executeJavaScript(
-            `window.scrollTo(${step.x}, ${step.y})`
+            `window.scrollTo(${Number(step.x) || 0}, ${Number(step.y) || 0})`
           );
           await this.delay(500);
           result.status = 'success';
@@ -660,8 +660,8 @@ export class FlowRunner {
         (function() {
           const el = document.querySelector(${JSON.stringify(step.selector)});
           if (el) {
-            el.scrollTop = ${step.scrollTop};
-            ${step.scrollLeft != null ? `el.scrollLeft = ${step.scrollLeft};` : ''}
+            el.scrollTop = ${Number(step.scrollTop) || 0};
+            ${step.scrollLeft != null ? `el.scrollLeft = ${Number(step.scrollLeft) || 0};` : ''}
             return true;
           }
           return false;
@@ -872,7 +872,7 @@ export class FlowRunner {
           if (action.scrollTarget) {
             if (action.scrollTarget.isPage) {
               await wc.executeJavaScript(
-                `window.scrollTo(${action.scrollTarget.x}, ${action.scrollTarget.y})`
+                `window.scrollTo(${Number(action.scrollTarget.x) || 0}, ${Number(action.scrollTarget.y) || 0})`
               );
             } else if (action.selector) {
               status = await this.executeScrollElement({
