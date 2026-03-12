@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ChevronLeft, ChevronRight, RotateCw, Globe, Star, Trash2, Pencil, Check, Bookmark as BookmarkIcon } from 'lucide-react';
 import { Button } from './ui/Button';
@@ -109,6 +109,18 @@ export function UrlBar() {
     setEditingIndex(null);
   };
 
+  const mainTab = useAppStore(s => s.mainTab);
+
+  // Hide BrowserView when bookmarks dropdown is open so it doesn't cover the menu
+  const handleBookmarksOpenChange = useCallback((open: boolean) => {
+    if (!open) setEditingIndex(null);
+    // Only toggle BrowserView if we're on the browser tab
+    if (mainTab === 'browser') {
+      if (open) browser.hide();
+      else browser.show();
+    }
+  }, [mainTab]);
+
   const isBlank = !browserUrl || browserUrl === 'about:blank';
   const hasActiveFlow = !!useFlowStore(s => s.activeFlowId);
   const activeFlowSteps = useFlowStore(s => s.getActiveFlow()?.steps.length ?? 0);
@@ -181,7 +193,7 @@ export function UrlBar() {
       </Tooltip>
 
       {/* Bookmarks picker */}
-      <DropdownMenu.Root onOpenChange={(open) => { if (!open) setEditingIndex(null); }}>
+      <DropdownMenu.Root onOpenChange={handleBookmarksOpenChange}>
         <DropdownMenu.Trigger asChild>
           <Button variant="ghost" size="icon-sm" className="relative" title="Bookmarks">
             <BookmarkIcon className="w-3.5 h-3.5" />
