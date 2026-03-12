@@ -1082,6 +1082,7 @@ export class Recorder {
   private _macroAccumulatedActions: Record<string, unknown>[] = [];
   private _previewDir: string;
   private _previewCounter = 0;
+  private _pendingPreviews: Promise<void>[] = [];
 
   constructor(view: BrowserView, window: BrowserWindow) {
     this.view = view;
@@ -1148,6 +1149,7 @@ export class Recorder {
     this._macroStartUrl = this.view.webContents.getURL();
     this._macroAccumulatedActions = [];
     this._previewCounter = 0;
+    this._pendingPreviews = [];
     await this.view.webContents.executeJavaScript(MACRO_OVERLAY_JS);
 
     // Real-time action capture via console.log — catches actions even if navigation
@@ -1162,7 +1164,8 @@ export class Recorder {
 
           // For snap actions, capture a live preview screenshot immediately
           if (action.action === 'snap' && action.snapRegion) {
-            this.capturePreview(action);
+            const p = this.capturePreview(action);
+            this._pendingPreviews.push(p);
           }
         } catch { /* parse error, ignore */ }
       }
@@ -1324,9 +1327,24 @@ export class Recorder {
 
         if (state.done) {
           this.stopPolling();
-          const allActions = (state.actions && state.actions.length >= this._macroAccumulatedActions.length)
-            ? state.actions
-            : this._macroAccumulatedActions;
+          // Wait for any in-flight preview captures to finish
+          if (this._pendingPreviews.length > 0) {
+            await Promise.allSettled(this._pendingPreviews);
+            this._pendingPreviews = [];
+          }
+          // Always prefer accumulated actions — they have previewPath data from capturePreview().
+          // Page actions are a JSON copy that loses our enriched fields.
+          let allActions = this._macroAccumulatedActions;
+          // If page captured actions we missed (unlikely), merge them in
+          if (state.actions && state.actions.length > allActions.length) {
+            // Copy previewPaths from accumulated into page actions
+            for (let i = 0; i < allActions.length; i++) {
+              if ((allActions[i] as Record<string, unknown>).previewPath) {
+                state.actions[i].previewPath = (allActions[i] as Record<string, unknown>).previewPath;
+              }
+            }
+            allActions = state.actions;
+          }
           this._macroAccumulatedActions = [];
           const startUrl = this._macroStartUrl || this.view.webContents.getURL();
           await this.view.webContents.executeJavaScript('window.__dashsnap_macro_done = false; window.__dashsnap_macro_actions = [];').catch(() => {});
@@ -1339,9 +1357,12 @@ export class Recorder {
           await this.executeTrustedType(state.pendingType.selector, state.pendingType.text, state.pendingType.pressEnter);
         }
 
-        // Sync actions — only update if page has more than our accumulated copy
+        // Sync actions — only add NEW actions from the page that we don't have yet.
+        // Don't overwrite — our accumulated copy has previewPath data.
         if (state.actions && state.actions.length > this._macroAccumulatedActions.length) {
-          this._macroAccumulatedActions = state.actions;
+          for (let i = this._macroAccumulatedActions.length; i < state.actions.length; i++) {
+            this._macroAccumulatedActions.push(state.actions[i]);
+          }
         }
       } catch {
         // Page may have navigated — accumulated actions are safe in main process

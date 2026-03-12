@@ -7,7 +7,7 @@ import {
   Plus, Clapperboard, Play, Square,
   CheckCircle2, AlertTriangle, XCircle, Clock, SkipForward,
   FlaskConical, Sparkles, Presentation, FolderOpen, Images,
-  FileCheck, Download, Camera, Check, Layout,
+  Camera, Check, Layout, ChevronDown,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -15,7 +15,6 @@ import { Card } from './ui/Card';
 import { RecordingOverlay } from './RecordingOverlay';
 import { SlideCard, EmptySlideCard } from './SlideCard';
 import { ActionPanel } from './ActionPanel';
-import { SlideLayoutPanel } from './SlideLayoutPanel';
 import { useFlowStore } from '@/stores/flowStore';
 import { useAppStore } from '@/stores/appStore';
 import { recorder, flow as flowIpc, app as appIpc, browser } from '@/lib/ipc';
@@ -68,7 +67,6 @@ export function RecordPanel({ onEditStep, onShowOutput, onSlideSelected }: Recor
   const runProgress = useAppStore(s => s.runProgress);
   const isRunning = useAppStore(s => s.isRunning);
   const setRunProgress = useAppStore(s => s.setRunProgress);
-  const globalLayout = useAppStore(s => s.settings.pptxLayout);
   const browserUrl = useAppStore(s => s.browserUrl);
 
   const [navUrl, setNavUrl] = useState('');
@@ -80,8 +78,32 @@ export function RecordPanel({ onEditStep, onShowOutput, onSlideSelected }: Recor
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [selectedSlideId, setSelectedSlideId] = useState<string | null>(null);
-  const [bottomTab, setBottomTab] = useState<'actions' | 'layout'>('actions');
   const [deleteStepId, setDeleteStepId] = useState<string | null>(null);
+
+  // Scroll overflow detection
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showScrollHint, setShowScrollHint] = useState(false);
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const isOverflowing = el.scrollHeight > el.clientHeight;
+    const isNearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 40;
+    setShowScrollHint(isOverflowing && !isNearBottom);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    checkScroll();
+    el.addEventListener('scroll', checkScroll, { passive: true });
+    const ro = new ResizeObserver(checkScroll);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', checkScroll);
+      ro.disconnect();
+    };
+  }, [checkScroll]);
 
   // Derive slides from flat step array
   const derived = useMemo(() => {
@@ -94,7 +116,6 @@ export function RecordPanel({ onEditStep, onShowOutput, onSlideSelected }: Recor
   // Detect current phase for stepper highlighting
   const currentPhase: Phase = useMemo(() => {
     if (!activeFlow) return 'record';
-    const totalSteps = activeFlow.steps.length;
     const snapCount = activeFlow.steps.filter(s => s.type === 'SNAP').length;
     if (isRunning || runProgress?.status === 'complete') return 'run';
     if (snapCount > 0) return 'slides';
@@ -208,10 +229,10 @@ export function RecordPanel({ onEditStep, onShowOutput, onSlideSelected }: Recor
   };
 
   const selectedSlide = slides.find(s => s.id === selectedSlideId);
-  const selectedActions = selectedSlide ? selectedSlide.actions : pendingActions;
   const noFlow = !activeFlow;
   const hasSlides = slides.length > 0;
   const hasUrl = browserUrl && browserUrl !== 'about:blank';
+  const allActions = activeFlow?.steps || [];
 
   // ─── Phase status helpers ──────────────────────────────────────────────
 
@@ -239,7 +260,7 @@ export function RecordPanel({ onEditStep, onShowOutput, onSlideSelected }: Recor
   // ─── Render ────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       {isRecording && <RecordingOverlay type={recordingType} />}
 
       {/* Recording status banner */}
@@ -257,7 +278,7 @@ export function RecordPanel({ onEditStep, onShowOutput, onSlideSelected }: Recor
       )}
 
       {/* ═══ Vertical Stepper — all phases always visible ═══ */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
         {/* Workflow header */}
         <div className="px-3 pt-3 pb-1.5 flex items-center gap-2">
           <div className="w-1 h-4 rounded-full bg-ds-accent" />
@@ -287,7 +308,7 @@ export function RecordPanel({ onEditStep, onShowOutput, onSlideSelected }: Recor
                 </div>
               )}
 
-              {/* Record button — primary (44px) */}
+              {/* Record button — primary */}
               <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
                 <button
                   onClick={handleRecordMacro}
@@ -370,6 +391,23 @@ export function RecordPanel({ onEditStep, onShowOutput, onSlideSelected }: Recor
                   </Button>
                 </div>
               </div>
+
+              {/* ─── Recorded actions list (inline in Record step) ─── */}
+              {allActions.length > 0 && (
+                <div className="pt-2">
+                  <ActionPanel
+                    actions={allActions}
+                    stepWaitSeconds={defaults.stepWaitSeconds}
+                    runResults={runResultsMap}
+                    currentRunningStepId={currentRunningStepId}
+                    onEditAction={onEditStep || (() => {})}
+                    onDeleteAction={(id) => setDeleteStepId(id)}
+                    onUpdateAction={updateStep}
+                    onHighlightElement={(sel) => browser.highlightElement(sel)}
+                    onClearHighlight={() => browser.clearHighlight()}
+                  />
+                </div>
+              )}
             </div>
           </StepperSection>
 
@@ -409,61 +447,6 @@ export function RecordPanel({ onEditStep, onShowOutput, onSlideSelected }: Recor
                       </span>
                     </div>
                   )}
-
-                  {/* Tabbed detail panel for selected slide */}
-                  {selectedSlide && (
-                    <div className="border border-ds-border/40 rounded-lg overflow-hidden mt-2">
-                      {/* Tab bar */}
-                      <div className="flex items-center gap-0 border-b border-ds-border/40 bg-ds-surface/60 px-1">
-                        <button
-                          onClick={() => setBottomTab('actions')}
-                          className={cn(
-                            'px-3 py-1.5 text-xs font-semibold transition-colors border-b-2 -mb-px',
-                            bottomTab === 'actions'
-                              ? 'border-ds-accent text-ds-accent'
-                              : 'border-transparent text-ds-text-dim hover:text-ds-text',
-                          )}
-                        >
-                          Actions
-                        </button>
-                        <button
-                          onClick={() => setBottomTab('layout')}
-                          className={cn(
-                            'px-3 py-1.5 text-xs font-semibold transition-colors border-b-2 -mb-px',
-                            bottomTab === 'layout'
-                              ? 'border-ds-accent text-ds-accent'
-                              : 'border-transparent text-ds-text-dim hover:text-ds-text',
-                          )}
-                        >
-                          Layout
-                        </button>
-                      </div>
-
-                      {/* Tab content */}
-                      <div className="p-2 max-h-[300px] overflow-y-auto">
-                        {bottomTab === 'actions' ? (
-                          <ActionPanel
-                            actions={selectedActions}
-                            slideTitle={selectedSlide.title}
-                            stepWaitSeconds={defaults.stepWaitSeconds}
-                            runResults={runResultsMap}
-                            currentRunningStepId={currentRunningStepId}
-                            onEditAction={onEditStep || (() => {})}
-                            onDeleteAction={(id) => setDeleteStepId(id)}
-                            onUpdateAction={updateStep}
-                            onHighlightElement={(sel) => browser.highlightElement(sel)}
-                            onClearHighlight={() => browser.clearHighlight()}
-                          />
-                        ) : (
-                          <SlideLayoutPanel
-                            slide={selectedSlide}
-                            globalLayout={globalLayout}
-                            onUpdateStep={updateStep}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </>
               ) : (
                 <div className="rounded-lg border border-ds-emerald/20 bg-ds-emerald/5 px-3 py-2 mt-1">
@@ -483,7 +466,7 @@ export function RecordPanel({ onEditStep, onShowOutput, onSlideSelected }: Recor
                       <p className="text-xs font-medium text-ds-emerald">Slides appear here</p>
                       <p className="text-xs text-ds-text-muted mt-0.5">
                         Each screenshot you take becomes a slide.
-                        Select a slide to edit its layout or view its actions.
+                        Select a slide to edit its layout in the main area.
                       </p>
                     </>
                   )}
@@ -579,75 +562,83 @@ export function RecordPanel({ onEditStep, onShowOutput, onSlideSelected }: Recor
                 )}
               </AnimatePresence>
 
-              {/* Secondary actions */}
-              <div className="flex gap-1.5">
-                <Button
-                  variant="outline"
-                  className="flex-1 h-8 text-xs"
-                  disabled={noFlow || !activeFlow?.steps.length || isRunning || isRecording}
-                  onClick={() => {/* TODO: validate */}}
-                >
-                  <FileCheck className="w-3 h-3 mr-1" />
-                  Validate
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1 h-8 text-xs text-ds-cyan border-ds-cyan/30 hover:bg-ds-cyan/10"
-                  disabled={noFlow || !activeFlow?.steps.length || isRunning}
-                  onClick={() => {/* TODO: export */}}
-                >
-                  <Download className="w-3 h-3 mr-1" />
-                  Export
-                </Button>
-                {onShowOutput && (
-                  <Button variant="ghost" size="sm" className="h-8 px-2" onClick={onShowOutput}>
-                    <Images className="w-3 h-3" />
-                  </Button>
-                )}
-              </div>
-
-              {/* Primary action — Run / Stop (44px) */}
-              {!isRunning ? (
-                <div className="flex gap-1.5">
-                  <motion.div className="flex-1" whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
-                    <Button
-                      variant="success"
-                      className="w-full font-bold shadow-lg shadow-ds-emerald/20"
-                      style={{ height: '44px', borderRadius: '10px' }}
-                      onClick={() => activeFlow && flowIpc.run(activeFlow.id)}
-                      disabled={noFlow || !activeFlow?.steps.length || isRecording}
-                    >
-                      <Play className="w-4 h-4 mr-1.5" />
-                      Run Report
-                    </Button>
-                  </motion.div>
-                  {selectedStepIndex !== null && (
-                    <Button
-                      variant="outline"
-                      style={{ height: '44px', borderRadius: '10px' }}
-                      onClick={() => activeFlow && flowIpc.runStep(activeFlow.id, selectedStepIndex)}
-                      disabled={noFlow}
-                      title="Test selected action"
-                    >
-                      <FlaskConical className="w-4 h-4" />
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <Button
-                  variant="destructive"
-                  className="w-full font-bold"
-                  style={{ height: '44px', borderRadius: '10px' }}
-                  onClick={() => flowIpc.stop()}
-                >
-                  <Square className="w-4 h-4 mr-1" />
-                  Stop
+              {/* Gallery */}
+              {onShowOutput && (
+                <Button variant="outline" size="sm" className="h-8 text-xs" onClick={onShowOutput}>
+                  <Images className="w-3 h-3 mr-1" />
+                  Gallery
                 </Button>
               )}
+
             </div>
           </StepperSection>
 
         </div>
+      </div>
+
+      {/* ═══ Scroll-down indicator ═══ */}
+      <AnimatePresence>
+        {showScrollHint && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute bottom-[60px] left-0 right-0 pointer-events-none shrink-0"
+          >
+            {/* Gradient fade */}
+            <div className="h-10 bg-gradient-to-t from-ds-surface/90 to-transparent" />
+            {/* Pill indicator */}
+            <div className="flex justify-center pb-1 bg-ds-surface/90">
+              <div className="flex items-center gap-1 px-3 py-0.5 rounded-full bg-ds-accent/15 border border-ds-accent/30 pointer-events-auto cursor-pointer"
+                onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })}
+              >
+                <ChevronDown className="w-3 h-3 text-ds-accent" />
+                <span className="text-xs text-ds-accent font-medium">More below</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ═══ Pinned Run/Stop button — always visible ═══ */}
+      <div className="shrink-0 px-3 py-2 border-t border-ds-border bg-ds-surface/80 backdrop-blur-sm">
+        {!isRunning ? (
+          <div className="flex gap-1.5">
+            <motion.div className="flex-1" whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
+              <Button
+                variant="success"
+                className="w-full font-bold shadow-lg shadow-ds-emerald/20"
+                style={{ height: '44px', borderRadius: '10px' }}
+                onClick={() => activeFlow && flowIpc.run(activeFlow.id)}
+                disabled={noFlow || !activeFlow?.steps.length || isRecording}
+              >
+                <Play className="w-4 h-4 mr-1.5" />
+                Run Report
+              </Button>
+            </motion.div>
+            {selectedStepIndex !== null && (
+              <Button
+                variant="outline"
+                style={{ height: '44px', borderRadius: '10px' }}
+                onClick={() => activeFlow && flowIpc.runStep(activeFlow.id, selectedStepIndex)}
+                disabled={noFlow}
+                title="Test selected action"
+              >
+                <FlaskConical className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        ) : (
+          <Button
+            variant="destructive"
+            className="w-full font-bold"
+            style={{ height: '44px', borderRadius: '10px' }}
+            onClick={() => flowIpc.stop()}
+          >
+            <Square className="w-4 h-4 mr-1" />
+            Stop
+          </Button>
+        )}
       </div>
 
       {/* Delete confirmation dialog */}
