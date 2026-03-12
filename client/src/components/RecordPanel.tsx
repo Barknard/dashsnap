@@ -403,6 +403,7 @@ export function RecordPanel({ onEditStep, onShowOutput, onSlideSelected }: Recor
                     onEditAction={onEditStep || (() => {})}
                     onDeleteAction={(id) => setDeleteStepId(id)}
                     onUpdateAction={updateStep}
+                    onPlayStep={(idx) => activeFlow && flowIpc.runStep(activeFlow.id, idx)}
                     onHighlightElement={(sel) => browser.highlightElement(sel)}
                     onClearHighlight={() => browser.clearHighlight()}
                   />

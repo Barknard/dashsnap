@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('dashsnap', {
       'flow:save', 'flow:load', 'flow:export', 'flow:import', 'flow:browse-csv',
       'pptx:build',
       'settings:load', 'settings:save', 'settings:browse-template', 'settings:browse-folder',
+      'template:enumerate',
       'app:get-version', 'app:open-path', 'app:open-external', 'app:list-outputs',
     ];
     if (allowedInvoke.includes(channel)) {

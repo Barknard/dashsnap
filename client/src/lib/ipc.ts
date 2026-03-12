@@ -231,6 +231,15 @@ export const pptx = {
   },
 };
 
+// ─── Template ────────────────────────────────────────────────────────────────
+
+export const template = {
+  enumerate: async (templatePath: string): Promise<Array<{ index: number; name: string; xmlPath: string }>> => {
+    if (!isElectron) return [];
+    return (await window.dashsnap!.invoke('template:enumerate', templatePath)) as Array<{ index: number; name: string; xmlPath: string }>;
+  },
+};
+
 // ─── Settings ───────────────────────────────────────────────────────────────
 
 export const settings = {

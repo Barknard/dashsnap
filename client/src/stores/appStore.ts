@@ -49,6 +49,8 @@ interface AppStore {
   setSlideEditMode: (mode: boolean) => void;
   mainTab: 'browser' | 'slides';
   setMainTab: (tab: 'browser' | 'slides') => void;
+  templateSlides: Array<{ index: number; name: string; xmlPath: string }>;
+  setTemplateSlides: (slides: Array<{ index: number; name: string; xmlPath: string }>) => void;
 }
 
 const defaultSettings: AppSettings = {
@@ -125,4 +127,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setSlideEditMode: (mode) => set({ slideEditMode: mode }),
   mainTab: 'browser',
   setMainTab: (tab) => set({ mainTab: tab }),
+  templateSlides: [],
+  setTemplateSlides: (slides) => set({ templateSlides: slides }),
 }));

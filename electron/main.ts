@@ -444,6 +444,15 @@ function setupIPC() {
     });
     return result.canceled ? null : result.filePaths[0] || null;
   });
+  ipcMain.handle('template:enumerate', async (_e, templatePath: string) => {
+    try {
+      const { enumerateTemplateSlides } = await import('./template-reader');
+      return await enumerateTemplateSlides(templatePath);
+    } catch (err) {
+      console.error('[Template] Failed to enumerate slides:', err);
+      return [];
+    }
+  });
   ipcMain.handle('settings:browse-folder', async () => {
     if (!mainWindow) return null;
     const result = await dialog.showOpenDialog(mainWindow, {

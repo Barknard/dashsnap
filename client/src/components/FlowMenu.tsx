@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import {
   ChevronDown, Plus, Copy, Download, Upload, Trash2,
-  FileText, Check, Layers,
+  FileText, Check, Layers, Presentation, X,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { useFlowStore } from '@/stores/flowStore';
+import { settings as settingsIpc, template as templateIpc } from '@/lib/ipc';
+import { useAppStore } from '@/stores/appStore';
 
 export function FlowMenu() {
   const flows = useFlowStore(s => s.flows);
@@ -21,9 +23,36 @@ export function FlowMenu() {
   const exportFlow = useFlowStore(s => s.exportFlow);
   const importFlow = useFlowStore(s => s.importFlow);
 
+  const updateFlowTemplate = useFlowStore(s => s.updateFlowTemplate);
+  const setTemplateSlides = useAppStore(s => s.setTemplateSlides);
+
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [newFlowName, setNewFlowName] = useState('');
+
+  // Enumerate template slides when flow changes or template changes
+  useEffect(() => {
+    if (activeFlow?.template) {
+      templateIpc.enumerate(activeFlow.template).then(slides => {
+        setTemplateSlides(slides);
+      });
+    } else {
+      setTemplateSlides([]);
+    }
+  }, [activeFlow?.template, setTemplateSlides]);
+
+  const handleBrowseTemplate = async () => {
+    if (!activeFlow) return;
+    const filePath = await settingsIpc.browseTemplate();
+    if (filePath) {
+      updateFlowTemplate(activeFlow.id, filePath);
+    }
+  };
+
+  const handleClearTemplate = () => {
+    if (!activeFlow) return;
+    updateFlowTemplate(activeFlow.id, '');
+  };
 
   const handleCreate = () => {
     if (newFlowName.trim()) {
@@ -122,6 +151,32 @@ export function FlowMenu() {
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
+      </div>
+
+      {/* Template row */}
+      <div className="flex items-center gap-2 px-3 py-1 border-b border-ds-border/40 bg-ds-surface/20">
+        <Presentation className="w-3 h-3 text-ds-text-dim shrink-0" />
+        {activeFlow?.template ? (
+          <>
+            <span className="text-xs text-ds-text-muted truncate flex-1" title={activeFlow.template}>
+              {activeFlow.template.split(/[/\\]/).pop()}
+            </span>
+            <button
+              onClick={handleClearTemplate}
+              className="text-ds-text-dim hover:text-ds-red transition-colors shrink-0"
+              title="Remove template"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={handleBrowseTemplate}
+            className="text-xs text-ds-accent hover:text-ds-accent/80 transition-colors"
+          >
+            Set PPTX Template
+          </button>
+        )}
       </div>
 
       {/* New flow dialog */}

@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import * as Switch from '@radix-ui/react-switch';
-import { Layout, Maximize2, Crop, Move } from 'lucide-react';
+import { Layout, Maximize2, Crop, Move, Presentation } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/stores/appStore';
 import type { DerivedSlide } from '@/lib/slides';
 import type { PptxLayout, FlowStep } from '@shared/types';
 
@@ -29,6 +30,7 @@ export function SlideCanvas({ slide, globalLayout, onUpdateStep }: SlideCanvasPr
   const canvasRef = useRef<HTMLDivElement>(null);
   const [activeInteraction, setActiveInteraction] = useState<InteractionMode | null>(null);
   const [cropMode, setCropMode] = useState(false);
+  const templateSlides = useAppStore(s => s.templateSlides);
 
   const dragRef = useRef<{
     mode: InteractionMode;
@@ -335,6 +337,28 @@ export function SlideCanvas({ slide, globalLayout, onUpdateStep }: SlideCanvasPr
           <span className="text-xs font-mono text-orange-400/70">
             T{layout.cropTop ?? 0}% R{layout.cropRight ?? 0}% B{layout.cropBottom ?? 0}% L{layout.cropLeft ?? 0}%
           </span>
+        )}
+
+        {/* Template slide selector (only when template is set) */}
+        {templateSlides.length > 0 && (
+          <>
+            <div className="w-px h-4 bg-ds-border/50" />
+            <div className="flex items-center gap-1.5">
+              <Presentation className="w-3 h-3 text-ds-text-dim" />
+              <span className="text-xs text-ds-text-dim">Base:</span>
+              <select
+                value={layout.templateSlideIndex ?? 0}
+                onChange={e => updateLayout({ templateSlideIndex: parseInt(e.target.value, 10) })}
+                className="h-5 px-1 text-xs bg-ds-bg border border-ds-border rounded focus:outline-none focus:border-ds-accent text-ds-text-muted cursor-pointer"
+              >
+                {templateSlides.map(ts => (
+                  <option key={ts.index} value={ts.index}>
+                    {ts.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
         )}
 
         {/* Dimensions readout */}

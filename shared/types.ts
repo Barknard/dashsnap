@@ -203,6 +203,7 @@ export interface PptxLayout {
   cropRight?: number;  // percent 0-50, default 0
   cropBottom?: number; // percent 0-50, default 0
   cropLeft?: number;   // percent 0-50, default 0
+  templateSlideIndex?: number;  // 0-based index into template .pptx slides
 }
 
 export interface AppSettings {

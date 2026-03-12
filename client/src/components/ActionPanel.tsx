@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   MousePointer, Clock, Globe, ArrowDown, Hand, ListFilter,
   Type, ArrowDownUp, Search, Filter, Clapperboard,
-  Pencil, X, GripVertical, Timer, Camera,
+  Pencil, X, GripVertical, Timer, Camera, Play,
 } from 'lucide-react';
 import { cn, truncate } from '@/lib/utils';
 import { Badge, stepTypeBadgeVariant } from './ui/Badge';
@@ -83,6 +83,7 @@ interface ActionPanelProps {
   onEditAction: (step: FlowStep) => void;
   onDeleteAction: (stepId: string) => void;
   onUpdateAction: (stepId: string, updates: Partial<FlowStep>) => void;
+  onPlayStep?: (stepIndex: number) => void;
   onHighlightElement?: (selector: string) => void;
   onClearHighlight?: () => void;
 }
@@ -96,6 +97,7 @@ export function ActionPanel({
   onEditAction,
   onDeleteAction,
   onUpdateAction,
+  onPlayStep,
   onHighlightElement,
   onClearHighlight,
 }: ActionPanelProps) {
@@ -156,7 +158,17 @@ export function ActionPanel({
                 isRunning && 'ring-1 ring-ds-accent bg-ds-accent/5 border-l-ds-accent',
               )}
             >
-              {/* Action number */}
+              {/* Play button + Action number */}
+              {onPlayStep && (
+                <Tooltip content="Run this step">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onPlayStep(idx); }}
+                    className="flex items-center justify-center w-5 h-5 rounded shrink-0 text-ds-text-dim hover:text-ds-emerald hover:bg-ds-emerald/10 transition-colors"
+                  >
+                    <Play className="w-3 h-3" />
+                  </button>
+                </Tooltip>
+              )}
               <span className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold text-ds-text-dim bg-ds-bg shrink-0">
                 {idx + 1}
               </span>
