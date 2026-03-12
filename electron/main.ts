@@ -32,6 +32,7 @@ let pptxBuilder: PptxBuilder;
 
 const SIDEBAR_DEFAULT_WIDTH = 380;
 const TOOLBAR_HEIGHT = 44;
+const MAIN_TAB_BAR_HEIGHT = 36;
 let sidebarWidth = SIDEBAR_DEFAULT_WIDTH;
 let browserViewHidden = false;
 
@@ -283,9 +284,9 @@ function positionBrowserView() {
   const [width, height] = mainWindow.getContentSize();
   browserView.setBounds({
     x: sidebarWidth,
-    y: TOOLBAR_HEIGHT,
+    y: TOOLBAR_HEIGHT + MAIN_TAB_BAR_HEIGHT,
     width: Math.max(0, width - sidebarWidth),
-    height: Math.max(0, height - TOOLBAR_HEIGHT),
+    height: Math.max(0, height - TOOLBAR_HEIGHT - MAIN_TAB_BAR_HEIGHT),
   });
 }
 

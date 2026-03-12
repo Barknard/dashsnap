@@ -47,6 +47,8 @@ interface AppStore {
   setShowSettings: (show: boolean) => void;
   slideEditMode: boolean;
   setSlideEditMode: (mode: boolean) => void;
+  mainTab: 'browser' | 'slides';
+  setMainTab: (tab: 'browser' | 'slides') => void;
 }
 
 const defaultSettings: AppSettings = {
@@ -121,4 +123,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setShowSettings: (show) => set({ showSettings: show }),
   slideEditMode: false,
   setSlideEditMode: (mode) => set({ slideEditMode: mode }),
+  mainTab: 'browser',
+  setMainTab: (tab) => set({ mainTab: tab }),
 }));

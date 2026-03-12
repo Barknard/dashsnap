@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Images } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Images, Monitor, Presentation } from 'lucide-react';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { Header } from './components/Header';
 import { UrlBar } from './components/UrlBar';
@@ -14,7 +14,7 @@ import { Button } from './components/ui/Button';
 import { useFlowStore } from './stores/flowStore';
 import { useAppStore } from './stores/appStore';
 import { recorder, app as appIpc, flow as flowIpc, browser } from './lib/ipc';
-import { generateId } from './lib/utils';
+import { generateId, cn } from './lib/utils';
 import { deriveSlides } from './lib/slides';
 import type { FlowStep, ClickStep, SnapStep, HoverStep, SelectStep, TypeStep, ScrollElementStep, SearchSelectStep, FilterStep, RunProgress } from '@shared/types';
 import { toast } from 'sonner';
@@ -34,6 +34,9 @@ export default function App() {
   const slideEditMode = useAppStore(s => s.slideEditMode);
   const setSlideEditMode = useAppStore(s => s.setSlideEditMode);
   const globalLayout = useAppStore(s => s.settings.pptxLayout);
+  const mainTab = useAppStore(s => s.mainTab);
+  const setMainTab = useAppStore(s => s.setMainTab);
+  const prevIsRunning = useRef(false);
 
   const loadFlows = useFlowStore(s => s.loadFlows);
   const addStep = useFlowStore(s => s.addStep);
@@ -52,29 +55,39 @@ export default function App() {
     ? deriveSlides(activeFlow.steps).slides.find(s => s.id === selectedSlideId) || null
     : null;
 
-  // When a slide is selected, show the canvas in the main area
+  // When a slide is selected, just track it (tab switching is separate)
   const handleSlideSelected = useCallback((slideId: string | null) => {
     setSelectedSlideId(slideId);
-    if (slideId && activeFlow) {
-      const slide = deriveSlides(activeFlow.steps).slides.find(s => s.id === slideId);
-      if (slide) {
-        setSlideEditMode(true);
-        browser.hide();
-        return;
-      }
-    }
-    // If no slide selected, show browser
-    setSlideEditMode(false);
-    browser.show();
-  }, [activeFlow, setSlideEditMode]);
+  }, []);
 
-  // Restore BrowserView when flow is cleared
+  // Sync BrowserView visibility with mainTab
   useEffect(() => {
-    if (!activeFlowId && slideEditMode) {
-      setSlideEditMode(false);
+    if (mainTab === 'browser') {
       browser.show();
+    } else {
+      browser.hide();
     }
-  }, [activeFlowId, slideEditMode, setSlideEditMode]);
+  }, [mainTab]);
+
+  // Restore browser tab when flow is cleared
+  useEffect(() => {
+    if (!activeFlowId) {
+      setMainTab('browser');
+    }
+  }, [activeFlowId, setMainTab]);
+
+  // Auto-switch tabs on run start / complete
+  useEffect(() => {
+    if (isRunning && !prevIsRunning.current) {
+      // Run just started — switch to browser to watch
+      setMainTab('browser');
+    }
+    if (!isRunning && prevIsRunning.current) {
+      // Run just finished — switch to slides to see results
+      setMainTab('slides');
+    }
+    prevIsRunning.current = isRunning;
+  }, [isRunning, setMainTab]);
 
   // Initialize
   useEffect(() => {
@@ -450,24 +463,72 @@ export default function App() {
             </div>
           </div>
 
-          {/* ─── Main content area (behind BrowserView, or SlideCanvas) ─── */}
-          <div className="flex-1 min-w-0">
-            {slideEditMode && selectedSlide ? (
-              <SlideCanvas
-                slide={selectedSlide}
-                globalLayout={globalLayout}
-                onUpdateStep={updateStep}
-              />
-            ) : (
-              /* This area is covered by the Electron BrowserView.
-                 When BrowserView is hidden (slide edit mode), React content shows through. */
-              <div className="h-full flex items-center justify-center bg-ds-bg">
-                <div className="text-center space-y-2 opacity-40">
-                  <p className="text-sm text-ds-text-dim">Browser renders here</p>
-                  <p className="text-xs text-ds-text-dim">Select a slide to preview layout</p>
+          {/* ─── Main content area with tab bar ─── */}
+          <div className="flex-1 min-w-0 flex flex-col">
+            {/* Tab bar — 36px, sits above BrowserView */}
+            <div className="flex items-center shrink-0 border-b border-ds-border bg-ds-surface/60" style={{ height: '36px' }}>
+              <button
+                onClick={() => setMainTab('browser')}
+                className={cn(
+                  'flex items-center gap-1.5 px-4 h-full text-xs font-medium border-b-2 transition-colors',
+                  mainTab === 'browser'
+                    ? 'border-ds-accent text-ds-accent bg-ds-accent/5'
+                    : 'border-transparent text-ds-text-muted hover:text-ds-text hover:bg-ds-surface/50',
+                )}
+              >
+                <Monitor className="w-3.5 h-3.5" />
+                Browser
+                {isRunning && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-ds-accent animate-pulse" />
+                )}
+              </button>
+              <button
+                onClick={() => setMainTab('slides')}
+                className={cn(
+                  'flex items-center gap-1.5 px-4 h-full text-xs font-medium border-b-2 transition-colors',
+                  mainTab === 'slides'
+                    ? 'border-ds-emerald text-ds-emerald bg-ds-emerald/5'
+                    : 'border-transparent text-ds-text-muted hover:text-ds-text hover:bg-ds-surface/50',
+                )}
+              >
+                <Presentation className="w-3.5 h-3.5" />
+                Slides
+                {selectedSlide && (
+                  <span className="text-[10px] text-ds-text-dim font-mono">
+                    #{(selectedSlide.slideIndex ?? 0) + 1}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Content area */}
+            <div className="flex-1 min-h-0 relative">
+              {mainTab === 'slides' ? (
+                selectedSlide ? (
+                  <SlideCanvas
+                    slide={selectedSlide}
+                    globalLayout={globalLayout}
+                    onUpdateStep={updateStep}
+                  />
+                ) : (
+                  <div className="h-full flex items-center justify-center bg-ds-bg">
+                    <div className="text-center space-y-2 opacity-40">
+                      <Presentation className="w-10 h-10 mx-auto text-ds-text-dim" />
+                      <p className="text-sm text-ds-text-dim">No slide selected</p>
+                      <p className="text-xs text-ds-text-dim">Select a slide in the sidebar or record a capture</p>
+                    </div>
+                  </div>
+                )
+              ) : (
+                /* Browser tab — BrowserView overlays this area natively */
+                <div className="h-full flex items-center justify-center bg-ds-bg">
+                  <div className="text-center space-y-2 opacity-40">
+                    <Monitor className="w-10 h-10 mx-auto text-ds-text-dim" />
+                    <p className="text-sm text-ds-text-dim">Browser renders here</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
