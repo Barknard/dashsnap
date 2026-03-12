@@ -4,7 +4,7 @@ import * as Slider from '@radix-ui/react-slider';
 import {
   Settings, FolderOpen, FileText, Globe, Lightbulb,
   RefreshCw, X, Heart, Download, CheckCircle, AlertCircle, ExternalLink, Loader2,
-  Layout, Maximize2, RotateCw, Clock,
+  Layout, Maximize2, RotateCw, Clock, Shield, Lock, Trash2,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -290,6 +290,79 @@ export function SettingsDialog() {
               >
                 <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-4 translate-x-0.5" />
               </Switch.Root>
+            </div>
+
+            {/* Divider — Enterprise */}
+            <div className="border-t border-ds-border" />
+
+            <label className="text-xs font-medium text-ds-text flex items-center gap-1.5">
+              <Shield className="w-3 h-3 text-ds-amber" />
+              Enterprise &amp; Security
+            </label>
+
+            {/* Disable Auto-Update */}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-medium text-ds-text flex items-center gap-1.5">
+                  <RefreshCw className="w-3 h-3 text-ds-text-dim" />
+                  Disable Auto-Update
+                </span>
+                <p className="text-[10px] text-ds-text-dim mt-0.5">
+                  Prevent automatic update checks &amp; downloads
+                </p>
+              </div>
+              <Switch.Root
+                checked={currentSettings.disableAutoUpdate ?? false}
+                onCheckedChange={v => saveSettings({ disableAutoUpdate: v })}
+                className="w-9 h-5 rounded-full bg-ds-bg border border-ds-border data-[state=checked]:bg-ds-amber transition-colors"
+              >
+                <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-4 translate-x-0.5" />
+              </Switch.Root>
+            </div>
+
+            {/* Encrypt Config Files */}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-medium text-ds-text flex items-center gap-1.5">
+                  <Lock className="w-3 h-3 text-ds-text-dim" />
+                  Encrypt Config Files
+                </span>
+                <p className="text-[10px] text-ds-text-dim mt-0.5">
+                  Encrypt flows &amp; settings with Windows DPAPI
+                </p>
+              </div>
+              <Switch.Root
+                checked={currentSettings.encryptConfigFiles ?? false}
+                onCheckedChange={v => saveSettings({ encryptConfigFiles: v })}
+                className="w-9 h-5 rounded-full bg-ds-bg border border-ds-border data-[state=checked]:bg-ds-accent transition-colors"
+              >
+                <Switch.Thumb className="block w-4 h-4 rounded-full bg-white shadow-sm transition-transform data-[state=checked]:translate-x-4 translate-x-0.5" />
+              </Switch.Root>
+            </div>
+
+            {/* Output Retention */}
+            <div className="space-y-1.5">
+              <span className="text-xs font-medium text-ds-text flex items-center gap-1.5">
+                <Trash2 className="w-3 h-3 text-ds-text-dim" />
+                Auto-Purge Screenshots
+              </span>
+              <p className="text-[10px] text-ds-text-dim">
+                Delete output files older than this many days (0 = never)
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={365}
+                  value={currentSettings.outputRetentionDays ?? 5}
+                  onChange={e => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v) && v >= 0 && v <= 365) saveSettings({ outputRetentionDays: v });
+                  }}
+                  className="w-16 h-7 px-2 text-xs font-mono font-bold text-ds-accent bg-ds-bg border border-ds-border rounded focus:outline-none focus:border-ds-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+                <span className="text-xs text-ds-text-dim">days</span>
+              </div>
             </div>
 
             {/* Divider */}

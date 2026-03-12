@@ -18,6 +18,7 @@ type BrowserManager = import('./browser-manager').BrowserManager;
 type Recorder = import('./recorder').Recorder;
 type FlowRunner = import('./flow-runner').FlowRunner;
 type PptxBuilder = import('./pptx-builder').PptxBuilder;
+type AuditLogger = import('./audit-logger').AuditLogger;
 
 // ─── Globals ────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ let browserManager: BrowserManager;
 let recorder: Recorder;
 let flowRunner: FlowRunner;
 let pptxBuilder: PptxBuilder;
+let auditLogger: AuditLogger;
 
 const SIDEBAR_DEFAULT_WIDTH = 380;
 const TOOLBAR_HEIGHT = 44;
@@ -160,9 +162,11 @@ function createWindow() {
   const { Recorder: Rec } = require('./electron/recorder') as typeof import('./recorder');
   const { FlowRunner: FR } = require('./electron/flow-runner') as typeof import('./flow-runner');
   const { PptxBuilder: PB } = require('./electron/pptx-builder') as typeof import('./pptx-builder');
+  const { AuditLogger: AL } = require('./electron/audit-logger') as typeof import('./audit-logger');
 
   // Initialize managers
   configManager = new CM(path.join(appDataPath, 'config'));
+  auditLogger = new AL(appDataPath);
   const settings = configManager.loadSettings();
   sidebarWidth = settings.sidebarWidth || SIDEBAR_DEFAULT_WIDTH;
 
@@ -371,6 +375,7 @@ function setupIPC() {
     });
     if (!result.canceled && result.filePath) {
       fs.writeFileSync(result.filePath, JSON.stringify(flow, null, 2));
+      auditLogger?.log({ action: 'flow-export', flowId, flowName: flow.name, detail: result.filePath });
     }
   });
   ipcMain.handle('flow:import', async () => {
@@ -389,11 +394,20 @@ function setupIPC() {
   });
 
   // Flow execution
-  ipcMain.on('flow:run', (_e, flowId: string) => flowRunner?.run(flowId));
+  ipcMain.on('flow:run', (_e, flowId: string) => {
+    const flows = configManager?.loadFlows();
+    const flow = flows?.flows?.find((f: { id: string; name: string }) => f.id === flowId);
+    auditLogger?.log({ action: 'flow-run', flowId, flowName: flow?.name });
+    flowRunner?.run(flowId);
+  });
   ipcMain.on('flow:run-step', (_e, flowId: string, stepIndex: number) =>
     flowRunner?.runSingleStep(flowId, stepIndex));
-  ipcMain.on('flow:run-batch', (_e, flowId: string, rows: Record<string, string>[]) =>
-    flowRunner?.runBatch(flowId, rows));
+  ipcMain.on('flow:run-batch', (_e, flowId: string, rows: Record<string, string>[]) => {
+    const flows = configManager?.loadFlows();
+    const flow = flows?.flows?.find((f: { id: string; name: string }) => f.id === flowId);
+    auditLogger?.log({ action: 'flow-run-batch', flowId, flowName: flow?.name, detail: `${rows.length} rows` });
+    flowRunner?.runBatch(flowId, rows);
+  });
   ipcMain.on('flow:stop', () => flowRunner?.stop());
 
   // CSV file picker for batch runs
@@ -423,13 +437,16 @@ function setupIPC() {
   });
 
   // PPTX
-  ipcMain.handle('pptx:build', (_e, flowId: string, screenshots: Array<{ name: string; path: string; slideLayout?: import('../shared/types').PptxLayout }>) =>
-    pptxBuilder?.build(flowId, screenshots));
+  ipcMain.handle('pptx:build', (_e, flowId: string, screenshots: Array<{ name: string; path: string; slideLayout?: import('../shared/types').PptxLayout }>) => {
+    auditLogger?.log({ action: 'pptx-build', flowId, detail: `${screenshots.length} screenshots` });
+    return pptxBuilder?.build(flowId, screenshots);
+  });
 
   // Settings
   ipcMain.handle('settings:load', () => configManager?.loadSettings());
   ipcMain.handle('settings:save', (_e, settings) => {
     configManager?.saveSettings(settings);
+    auditLogger?.log({ action: 'settings-save' });
     // Apply sidebar width change
     if (settings.sidebarWidth && settings.sidebarWidth !== sidebarWidth) {
       sidebarWidth = settings.sidebarWidth;
@@ -469,6 +486,12 @@ function setupIPC() {
   // App
   ipcMain.handle('app:get-version', () => app.getVersion());
   ipcMain.on('app:check-update', () => {
+    // Enterprise: block updates if disabled
+    const s = configManager?.loadSettings();
+    if (s?.disableAutoUpdate) {
+      mainWindow?.webContents.send('app:update-error', 'Auto-update disabled by administrator');
+      return;
+    }
     mainWindow?.webContents.send('app:update-checking');
     if (app.isPackaged) {
       const { autoUpdater: au } = require('electron-updater') as typeof import('electron-updater');
@@ -482,13 +505,19 @@ function setupIPC() {
     }
   });
   ipcMain.on('app:install-update', () => {
+    const s = configManager?.loadSettings();
+    if (s?.disableAutoUpdate) return;
     const { autoUpdater: au } = require('electron-updater') as typeof import('electron-updater');
     au.quitAndInstall(false, true);
   });
   ipcMain.on('app:download-update', () => {
+    const s = configManager?.loadSettings();
+    if (s?.disableAutoUpdate) return;
     downloadGitHubUpdate();
   });
   ipcMain.on('app:apply-update', () => {
+    const s = configManager?.loadSettings();
+    if (s?.disableAutoUpdate) return;
     // Use the path stored by main process during download — never accept from renderer
     if (pendingUpdatePath) {
       applyPortableUpdate(pendingUpdatePath);
@@ -563,6 +592,9 @@ function setupIPC() {
 
 function setupAutoUpdater() {
   if (isDev) return;
+  // Enterprise: skip auto-update if disabled
+  const settings = configManager?.loadSettings();
+  if (settings?.disableAutoUpdate) return;
 
   const { autoUpdater } = require('electron-updater') as typeof import('electron-updater');
 
@@ -807,6 +839,40 @@ WshShell.Run """${batchPath.replace(/\\/g, '\\\\')}""", 0, False
   app.quit();
 }
 
+// ─── Auto-purge old outputs ──────────────────────────────────────────────────
+
+function purgeOldOutputs() {
+  try {
+    const settings = configManager?.loadSettings();
+    const retentionDays = settings?.outputRetentionDays ?? 5;
+    if (retentionDays <= 0) return; // 0 = never purge
+
+    const outputDir = settings?.outputPath || path.join(getAppDataPath(), 'output');
+    if (!fs.existsSync(outputDir)) return;
+
+    const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+    const files = fs.readdirSync(outputDir).filter(f => /\.(png|jpg|jpeg|pptx)$/i.test(f));
+
+    let purged = 0;
+    for (const file of files) {
+      const fullPath = path.join(outputDir, file);
+      try {
+        const stat = fs.statSync(fullPath);
+        if (stat.mtimeMs < cutoff) {
+          fs.unlinkSync(fullPath);
+          purged++;
+        }
+      } catch { /* skip files we can't stat/delete */ }
+    }
+
+    if (purged > 0) {
+      auditLogger?.log({ action: 'purge-outputs', detail: `Purged ${purged} files older than ${retentionDays} days` });
+    }
+  } catch (err) {
+    console.error('Failed to purge old outputs:', err);
+  }
+}
+
 // ─── App lifecycle ──────────────────────────────────────────────────────────
 
 // Show splash immediately, wait for it to paint, THEN load heavy modules
@@ -841,6 +907,10 @@ app.whenReady().then(async () => {
   createWindow();
   splashProgress(80, 'Checking for updates...');
   setupAutoUpdater();
+
+  // Auto-purge old outputs on startup and every 24 hours
+  purgeOldOutputs();
+  setInterval(purgeOldOutputs, 24 * 60 * 60 * 1000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

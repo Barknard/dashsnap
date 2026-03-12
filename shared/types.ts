@@ -217,6 +217,10 @@ export interface AppSettings {
   sidebarWidth: number;
   bookmarks?: Bookmark[];
   pptxLayout?: PptxLayout;
+  // Enterprise settings
+  disableAutoUpdate?: boolean;
+  encryptConfigFiles?: boolean;
+  outputRetentionDays?: number;  // 0 = never purge, default 5
 }
 
 // ─── Run State ────────────────────────────────────────────────────────────────
