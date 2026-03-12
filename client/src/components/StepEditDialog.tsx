@@ -49,6 +49,7 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
   const [clickOffAfter, setClickOffAfter] = useState(true);
   const [searchText, setSearchText] = useState('');
   const [waitForResults, setWaitForResults] = useState(1);
+  const [snapRegion, setSnapRegion] = useState({ x: 0, y: 0, width: 100, height: 100 });
   const [applySelector, setApplySelector] = useState('');
   const [macroActions, setMacroActions] = useState<MacroAction[]>([]);
   const [macroWaitBetween, setMacroWaitBetween] = useState(500);
@@ -58,6 +59,7 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
     setLabel(step.label);
     if (step.type === 'WAIT') setSeconds(step.seconds);
     if (step.type === 'NAVIGATE') setUrl(step.url);
+    if (step.type === 'SNAP') setSnapRegion({ ...step.region });
     if (step.type === 'SCROLL') { setScrollX(step.x); setScrollY(step.y); }
     if (step.type === 'SELECT') { setOptionValue(step.optionValue); setClickOffAfter(step.clickOffAfter !== false); }
     if (step.type === 'TYPE') { setTypeText(step.text); setClearFirst(step.clearFirst ?? false); setClickOffAfter(step.clickOffAfter !== false); }
@@ -74,6 +76,7 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
   const handleSave = () => {
     const updates: Partial<FlowStep> = { label };
     if (step.type === 'WAIT') (updates as Record<string, unknown>).seconds = seconds;
+    if (step.type === 'SNAP') (updates as Record<string, unknown>).region = snapRegion;
     if (step.type === 'NAVIGATE') (updates as Record<string, unknown>).url = url;
     if (step.type === 'SCROLL') { (updates as Record<string, unknown>).x = scrollX; (updates as Record<string, unknown>).y = scrollY; }
     if (step.type === 'SELECT') { (updates as Record<string, unknown>).optionValue = optionValue; (updates as Record<string, unknown>).clickOffAfter = clickOffAfter; }
@@ -184,7 +187,7 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
               </div>
             )}
 
-            {/* SNAP specific */}
+            {/* SNAP specific (Fix #9: editable region) */}
             {step.type === 'SNAP' && (
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-ds-text-muted">Region</label>
@@ -192,14 +195,18 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
                   {(['x', 'y', 'width', 'height'] as const).map(key => (
                     <div key={key} className="space-y-1">
                       <span className="text-xs text-ds-text-dim uppercase">{key}</span>
-                      <div className="h-8 flex items-center justify-center rounded-md border border-ds-border bg-ds-bg text-xs font-mono text-ds-text-muted">
-                        {step.region[key]}
-                      </div>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={snapRegion[key]}
+                        onChange={e => setSnapRegion(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
+                        className="h-8 text-xs font-mono text-center"
+                      />
                     </div>
                   ))}
                 </div>
                 <p className="text-xs text-ds-text-dim">
-                  Re-record to change the region. {step.region.width}x{step.region.height}px area.
+                  {snapRegion.width}x{snapRegion.height}px capture area.
                 </p>
               </div>
             )}

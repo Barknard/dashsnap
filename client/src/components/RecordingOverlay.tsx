@@ -84,80 +84,25 @@ export function RecordingOverlay({ type }: RecordingOverlayProps) {
         </div>
       </motion.div>
 
-      {/* Macro hotkey help panel — shown in sidebar, not in the BrowserView */}
+      {/* Macro hotkey thin bar — compact reference (Fix #8) */}
       {isMacro && (
         <motion.div
-          initial={{ y: 20, opacity: 0 }}
+          initial={{ y: 10, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="absolute top-16 left-3 right-3 pointer-events-none"
+          transition={{ delay: 0.15 }}
+          className="absolute top-14 left-3 right-3 pointer-events-none"
         >
-          <div className="bg-ds-red/[0.06] border-2 border-dashed border-ds-red/40 rounded-xl p-4 shadow-2xl backdrop-blur-md space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-ds-red opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-ds-red" />
-              </span>
-              <p className="text-xs font-bold text-ds-red uppercase tracking-wider">Recording — Hotkey Reference</p>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-ds-surface/95 border border-ds-red/30 backdrop-blur-md">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <kbd className="px-1.5 py-0.5 rounded bg-ds-emerald/20 border border-ds-emerald/40 text-ds-emerald font-mono text-[10px] font-bold">S</kbd>
+              <span className="text-[10px] text-ds-text-dim">snap</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-ds-cyan/20 border border-ds-cyan/40 text-ds-cyan font-mono text-[10px] font-bold ml-1">R</kbd>
+              <span className="text-[10px] text-ds-text-dim">region</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-ds-accent/20 border border-ds-accent/40 text-ds-accent font-mono text-[10px] font-bold ml-1">Enter</kbd>
+              <span className="text-[10px] text-ds-text-dim">finish</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-ds-red/20 border border-ds-red/40 text-ds-red font-mono text-[10px] font-bold ml-1">Esc</kbd>
+              <span className="text-[10px] text-ds-text-dim">cancel</span>
             </div>
-
-            <div className="space-y-2">
-              <div className="flex items-start gap-3">
-                <kbd className="shrink-0 px-2 py-1 rounded-md bg-ds-bg border border-ds-border text-ds-text font-mono text-xs font-bold min-w-[40px] text-center">Click</kbd>
-                <div>
-                  <p className="text-xs font-medium text-ds-text">Record interaction</p>
-                  <p className="text-[10px] text-ds-text-dim">Click any element to capture it. Clicks go through to the page so filters open, buttons toggle, etc.</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <kbd className="shrink-0 px-2 py-1 rounded-md bg-ds-bg border border-ds-border text-ds-text font-mono text-xs font-bold min-w-[40px] text-center">Scroll</kbd>
-                <div>
-                  <p className="text-xs font-medium text-ds-text">Page & element scroll</p>
-                  <p className="text-[10px] text-ds-text-dim">Scroll anywhere — page scrolls and element scrolls are captured automatically.</p>
-                </div>
-              </div>
-
-              <div className="border-t border-ds-border/30 pt-2" />
-
-              <div className="flex items-start gap-3">
-                <kbd className="shrink-0 px-2 py-1 rounded-md bg-ds-emerald/20 border border-ds-emerald/40 text-ds-emerald font-mono text-xs font-bold min-w-[40px] text-center">S</kbd>
-                <div>
-                  <p className="text-xs font-medium text-ds-text">Snap element</p>
-                  <p className="text-[10px] text-ds-text-dim">Hover over an element and press S to screenshot it. Captured as a snap action in the sequence.</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <kbd className="shrink-0 px-2 py-1 rounded-md bg-ds-cyan/20 border border-ds-cyan/40 text-ds-cyan font-mono text-xs font-bold min-w-[40px] text-center">R</kbd>
-                <div>
-                  <p className="text-xs font-medium text-ds-text">Draw region screenshot</p>
-                  <p className="text-[10px] text-ds-text-dim">Press R to enter region draw mode. Click and drag to define the capture area.</p>
-                </div>
-              </div>
-
-              <div className="border-t border-ds-border/30 pt-2" />
-
-              <div className="flex items-start gap-3">
-                <kbd className="shrink-0 px-2 py-1 rounded-md bg-ds-accent/20 border border-ds-accent/40 text-ds-accent font-mono text-xs font-bold min-w-[40px] text-center">Enter</kbd>
-                <div>
-                  <p className="text-xs font-medium text-ds-text">Finish recording</p>
-                  <p className="text-[10px] text-ds-text-dim">Press Enter or click "Enter" in the browser banner to finish and save all recorded actions.</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <kbd className="shrink-0 px-2 py-1 rounded-md bg-ds-red/20 border border-ds-red/40 text-ds-red font-mono text-xs font-bold min-w-[40px] text-center">Esc</kbd>
-                <div>
-                  <p className="text-xs font-medium text-ds-text">Cancel recording</p>
-                  <p className="text-[10px] text-ds-text-dim">Discard all recorded actions and exit recording mode.</p>
-                </div>
-              </div>
-            </div>
-
-            <p className="text-[10px] text-ds-text-dim italic">
-              Input fields are auto-detected for variable substitution in batch runs.
-            </p>
           </div>
         </motion.div>
       )}

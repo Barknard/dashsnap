@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Flow, FlowStep, FlowConfig } from '@shared/types';
 import { generateId } from '@/lib/utils';
 import { flow as flowIpc } from '@/lib/ipc';
+import { toast } from 'sonner';
 
 interface FlowStore {
   flows: Flow[];
@@ -94,8 +95,13 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
   },
 
   deleteFlow: (id: string) => {
+    const deletedFlow = get().flows.find(f => f.id === id);
     set(state => {
       const remaining = state.flows.filter(f => f.id !== id);
+      const switchedTo = state.activeFlowId === id ? remaining[0] : null;
+      if (switchedTo) {
+        toast(`Switched to "${switchedTo.name}"`);
+      }
       return {
         flows: remaining,
         activeFlowId: state.activeFlowId === id ? (remaining[0]?.id || null) : state.activeFlowId,

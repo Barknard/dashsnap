@@ -4,8 +4,8 @@ import * as Progress from '@radix-ui/react-progress';
 import {
   Timer, Globe, ArrowDownToLine,
   Plus, Clapperboard, Play, Square,
-  CheckCircle2, AlertTriangle, XCircle, Clock,
-  FlaskConical, Sparkles, Presentation, FolderOpen,
+  CheckCircle2, AlertTriangle, XCircle, Clock, SkipForward,
+  FlaskConical, Sparkles, Presentation, FolderOpen, Images,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -24,16 +24,17 @@ function StatusIcon({ status }: { status: RunStepStatus }) {
     case 'warning': return <AlertTriangle className="w-3.5 h-3.5 text-ds-amber" />;
     case 'error': return <XCircle className="w-3.5 h-3.5 text-ds-red" />;
     case 'running': return <Clock className="w-3.5 h-3.5 text-ds-accent animate-pulse" />;
-    case 'skipped': return <Clock className="w-3.5 h-3.5 text-ds-text-dim" />;
+    case 'skipped': return <SkipForward className="w-3.5 h-3.5 text-ds-text-dim" />;
     default: return <div className="w-3.5 h-3.5 rounded-full border border-ds-border" />;
   }
 }
 
 interface RecordPanelProps {
   onEditStep?: (step: FlowStep) => void;
+  onShowOutput?: () => void;
 }
 
-export function RecordPanel({ onEditStep }: RecordPanelProps) {
+export function RecordPanel({ onEditStep, onShowOutput }: RecordPanelProps) {
   const activeFlow = useFlowStore(s => s.getActiveFlow());
   const addStep = useFlowStore(s => s.addStep);
   const defaults = useFlowStore(s => s.defaults);
@@ -346,7 +347,12 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
                       {snapCount} snap{snapCount !== 1 ? 's' : ''} in {formatDuration(elapsed)}
                     </span>
                     <div className="flex-1" />
-                    <Button variant="success" size="sm" onClick={() => appIpc.openPath('')}>
+                    {runProgress?.pptxPath && (
+                      <Button variant="success" size="sm" onClick={() => appIpc.openPath(runProgress.pptxPath!)}>
+                        <Presentation className="w-3 h-3 mr-1" /> Open PPTX
+                      </Button>
+                    )}
+                    <Button variant="outline" size="sm" onClick={() => appIpc.openPath('')}>
                       <FolderOpen className="w-3 h-3" />
                     </Button>
                   </div>
@@ -355,6 +361,14 @@ export function RecordPanel({ onEditStep }: RecordPanelProps) {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Output gallery link */}
+        {onShowOutput && (
+          <Button variant="ghost" size="sm" className="w-full text-ds-text-dim" onClick={onShowOutput}>
+            <Images className="w-3.5 h-3.5 mr-1.5" />
+            View Output Gallery
+          </Button>
+        )}
 
         {/* Run / Stop buttons */}
         {!isRunning ? (

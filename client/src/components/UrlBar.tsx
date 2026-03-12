@@ -8,6 +8,8 @@ import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import type { Bookmark } from '@shared/types';
 
+// UrlBar also imports browser title for bookmark naming (Fix #11)
+
 export function UrlBar() {
   const browserUrl = useAppStore(s => s.browserUrl);
   const setBrowserUrl = useAppStore(s => s.setBrowserUrl);
@@ -37,6 +39,13 @@ export function UrlBar() {
     return () => browser.offUrlChanged(handler);
   }, [setBrowserUrl]);
 
+  // Fix #10: Timeout for isLoading on navigation failure
+  useEffect(() => {
+    if (!isLoading) return;
+    const timeout = setTimeout(() => setIsLoading(false), 15000);
+    return () => clearTimeout(timeout);
+  }, [isLoading]);
+
   const navigate = () => {
     let url = inputValue.trim();
     if (!url) return;
@@ -58,17 +67,24 @@ export function UrlBar() {
 
   const isBookmarked = bookmarks.some(b => b.url === browserUrl);
 
+  const browserTitle = useAppStore(s => s.browserTitle);
+
   const toggleBookmark = () => {
     if (isBookmarked) {
       saveSettings({ bookmarks: bookmarks.filter(b => b.url !== browserUrl) });
     } else {
       const url = browserUrl;
       if (!url || url === 'about:blank') return;
+      // Fix #11: Use page <title> for bookmark name instead of hostname
       let name: string;
-      try {
-        name = new URL(url).hostname;
-      } catch {
-        name = url.slice(0, 30);
+      if (browserTitle && browserTitle.trim()) {
+        name = browserTitle.trim().slice(0, 60);
+      } else {
+        try {
+          name = new URL(url).hostname;
+        } catch {
+          name = url.slice(0, 30);
+        }
       }
       saveSettings({ bookmarks: [...bookmarks, { name, url }] });
     }

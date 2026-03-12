@@ -7,7 +7,7 @@ import {
   GripVertical, Pencil, X, ChevronUp, ChevronDown, ChevronRight,
   Layout, Maximize2, SlidersHorizontal, Trash2,
   Hand, ListFilter, Type, ArrowDownUp, Search, Filter, Clapperboard,
-  Timer,
+  Timer, SkipForward,
 } from 'lucide-react';
 import { type FlowStep, type PptxLayout, type RunStepStatus, type SnapStep } from '@shared/types';
 import { Badge, stepTypeBadgeVariant } from './ui/Badge';
@@ -134,6 +134,7 @@ export function StepList({ onEditStep }: StepListProps) {
   const [expandedSnapId, setExpandedSnapId] = useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
+  const [deleteStepId, setDeleteStepId] = useState<string | null>(null);
 
   const toggleGroupCollapse = useCallback((groupId: string) => {
     setCollapsedGroups(prev => {
@@ -374,7 +375,7 @@ export function StepList({ onEditStep }: StepListProps) {
                         className="inline-flex items-center gap-0.5 shrink-0"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Clock className="w-2.5 h-2.5 text-ds-text-dim" />
+                        <Clock className={cn('w-2.5 h-2.5', step.waitOverride != null ? 'text-ds-amber' : 'text-ds-text-dim')} />
                         <input
                           type="number"
                           min={1.5}
@@ -425,7 +426,7 @@ export function StepList({ onEditStep }: StepListProps) {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      onClick={(e) => { e.stopPropagation(); removeStep(step.id); }}
+                      onClick={(e) => { e.stopPropagation(); setDeleteStepId(step.id); }}
                       className="hover:text-ds-red"
                     >
                       <X className="w-3 h-3" />
@@ -602,6 +603,38 @@ export function StepList({ onEditStep }: StepListProps) {
           );
         })}
       </AnimatePresence>
+
+      {/* Delete step confirmation dialog (Fix #5) */}
+      <AlertDialog.Root open={!!deleteStepId} onOpenChange={open => { if (!open) setDeleteStepId(null); }}>
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="fixed top-0 left-0 bottom-0 w-[var(--sidebar-w,380px)] bg-black/60 z-50" />
+          <AlertDialog.Content className="fixed top-1/2 left-[calc(var(--sidebar-w,380px)/2)] -translate-x-1/2 -translate-y-1/2 w-[320px] bg-ds-surface border border-ds-border rounded-xl p-5 z-50 shadow-2xl">
+            <AlertDialog.Title className="text-sm font-bold text-ds-text">
+              Delete Step?
+            </AlertDialog.Title>
+            <AlertDialog.Description className="text-xs text-ds-text-dim mt-2 mb-4">
+              Remove "{flow?.steps.find(s => s.id === deleteStepId)?.label}"? This cannot be undone.
+            </AlertDialog.Description>
+            <div className="flex justify-end gap-2">
+              <AlertDialog.Cancel asChild>
+                <Button variant="ghost" size="sm">Cancel</Button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action asChild>
+                <Button
+                  size="sm"
+                  className="bg-ds-red hover:bg-ds-red/80 text-white"
+                  onClick={() => {
+                    if (deleteStepId) removeStep(deleteStepId);
+                    setDeleteStepId(null);
+                  }}
+                >
+                  Delete
+                </Button>
+              </AlertDialog.Action>
+            </div>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
 
       {/* Delete group confirmation dialog */}
       <AlertDialog.Root open={!!deleteGroupId} onOpenChange={open => { if (!open) setDeleteGroupId(null); }}>

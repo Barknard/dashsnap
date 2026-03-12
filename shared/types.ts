@@ -236,6 +236,7 @@ export interface RunProgress {
   results: RunStepResult[];
   startedAt?: string;
   completedAt?: string;
+  pptxPath?: string;
   batchRow?: number;
   batchTotal?: number;
   batchVariables?: Record<string, string>;

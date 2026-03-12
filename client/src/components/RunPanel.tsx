@@ -4,7 +4,7 @@ import * as Progress from '@radix-ui/react-progress';
 import * as Slider from '@radix-ui/react-slider';
 import {
   Play, Square, FlaskConical, FileText, FolderOpen,
-  CheckCircle2, AlertTriangle, XCircle, Clock, Sparkles,
+  CheckCircle2, AlertTriangle, XCircle, Clock, SkipForward, Sparkles,
   Presentation, Upload, Table2,
 } from 'lucide-react';
 import { Button } from './ui/Button';
@@ -22,7 +22,7 @@ function StatusIcon({ status }: { status: RunStepStatus }) {
     case 'warning': return <AlertTriangle className="w-3.5 h-3.5 text-ds-amber" />;
     case 'error': return <XCircle className="w-3.5 h-3.5 text-ds-red" />;
     case 'running': return <Clock className="w-3.5 h-3.5 text-ds-accent animate-pulse" />;
-    case 'skipped': return <Clock className="w-3.5 h-3.5 text-ds-text-dim" />;
+    case 'skipped': return <SkipForward className="w-3.5 h-3.5 text-ds-text-dim" />;
     default: return <div className="w-3.5 h-3.5 rounded-full border border-ds-border" />;
   }
 }
@@ -79,6 +79,13 @@ export function RunPanel() {
   const noFlow = !activeFlow;
   const noSteps = !activeFlow?.steps.length;
   const snapCount = runProgress?.results.filter(r => r.screenshotPath).length ?? 0;
+
+  // Fix #1: Wire up pptxPath from runProgress
+  useEffect(() => {
+    if (runProgress?.pptxPath) {
+      setOutputPath(runProgress.pptxPath);
+    }
+  }, [runProgress?.pptxPath]);
 
   const handleRun = () => {
     if (!activeFlow) return;
@@ -166,10 +173,10 @@ export function RunPanel() {
             </div>
           </div>
           <Slider.Root
-            value={[Math.min(defaults.stepWaitSeconds, 20)]}
+            value={[Math.min(defaults.stepWaitSeconds, 60)]}
             onValueChange={([v]) => setStepWait(v)}
             min={1}
-            max={20}
+            max={60}
             step={1}
             className="relative flex items-center h-5 w-full"
           >

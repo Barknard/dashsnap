@@ -92,6 +92,8 @@ export class FlowRunner {
         const PptxBuilder = (await import('./pptx-builder')).PptxBuilder;
         const builder = new PptxBuilder(this.config);
         const outputPath = await builder.build(flowId, screenshots);
+        progress.pptxPath = outputPath;
+        this.sendProgress(progress);
         logLines.push('─'.repeat(50));
         logLines.push(`Output: ${outputPath}`);
         logLines.push(`Screenshots: ${screenshots.length}`);
