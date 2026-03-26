@@ -191,6 +191,7 @@ function createWindow() {
     title: `DashSnap v${app.getVersion()}`,
     backgroundColor: '#13111C',
     titleBarStyle: 'default',
+    autoHideMenuBar: true,
     darkTheme: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
