@@ -49,7 +49,7 @@ export function FlowPanel({ onEditStep }: FlowPanelProps) {
       <div className="px-3 pb-3 space-y-2">
         <div className="flex items-center gap-1.5">
           <Select.Root value={activeFlowId || ''} onValueChange={setActiveFlow}>
-            <Select.Trigger className="flex-1 flex items-center justify-between h-9 px-3 rounded-lg border border-ds-border bg-ds-bg text-sm text-ds-text hover:border-ds-border-bright transition-colors">
+            <Select.Trigger className="flex-1 flex items-center justify-between h-9 px-3 rounded-lg border border-ds-border bg-ds-bg text-sm text-ds-text hover:border-ds-accent/50 hover:bg-ds-surface transition-colors data-[state=open]:border-ds-accent data-[state=open]:shadow-[0_0_8px_rgba(187,134,252,0.2)]">
               <Select.Value placeholder="Select a flow..." />
               <Select.Icon>
                 <ChevronDown className="w-3.5 h-3.5 text-ds-text-dim" />
@@ -66,7 +66,7 @@ export function FlowPanel({ onEditStep }: FlowPanelProps) {
                     <Select.Item
                       key={f.id}
                       value={f.id}
-                      className="flex items-center h-8 px-3 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-surface-hover outline-none data-[highlighted]:bg-ds-surface-hover"
+                      className="flex items-center h-8 px-3 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-accent/10 hover:text-ds-accent outline-none data-[highlighted]:bg-ds-accent/10 data-[highlighted]:text-ds-accent"
                     >
                       <Select.ItemText>{f.name}</Select.ItemText>
                     </Select.Item>

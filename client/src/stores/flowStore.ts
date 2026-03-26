@@ -161,13 +161,29 @@ export const useFlowStore = create<FlowStore>((set, get) => ({
     get().saveFlows();
   },
 
-  addStep: (step: FlowStep) => {
+  addStep: async (step: FlowStep) => {
     const { activeFlowId } = get();
     if (!activeFlowId) return;
+
+    // On first step, save the window size so playback can restore it
+    const activeFlow = get().flows.find(f => f.id === activeFlowId);
+    let windowSize = activeFlow?.recordedWindowSize;
+    if (!windowSize && activeFlow?.steps.length === 0) {
+      try {
+        const { app: appIpc } = await import('@/lib/ipc');
+        windowSize = (await appIpc.getWindowSize()) ?? undefined;
+      } catch { /* non-Electron env */ }
+    }
+
     set(state => ({
       flows: state.flows.map(f =>
         f.id === activeFlowId
-          ? { ...f, steps: [...f.steps, step], updatedAt: new Date().toISOString() }
+          ? {
+              ...f,
+              steps: [...f.steps, step],
+              updatedAt: new Date().toISOString(),
+              ...(windowSize && !f.recordedWindowSize ? { recordedWindowSize: windowSize } : {}),
+            }
           : f
       ),
     }));

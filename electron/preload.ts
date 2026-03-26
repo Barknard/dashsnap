@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('dashsnap', {
       'settings:load', 'settings:save', 'settings:browse-template', 'settings:browse-folder',
       'template:enumerate',
       'app:get-version', 'app:open-path', 'app:open-external', 'app:list-outputs',
+      'app:get-window-size', 'app:resize-window', 'app:read-image', 'app:get-flow-screenshots',
     ];
     if (allowedInvoke.includes(channel)) {
       return ipcRenderer.invoke(channel, ...args);

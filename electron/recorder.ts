@@ -158,6 +158,7 @@ const CLICK_OVERLAY_JS = `
       strategy: strategy,
       xy: [Math.round(rect.left + rect.width/2), Math.round(rect.top + rect.height/2)],
       rect: { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
+      viewport: { width: window.innerWidth, height: window.innerHeight },
     };
   }
 
@@ -664,26 +665,29 @@ const MACRO_OVERLAY_JS = `
   }
 
   // --- UI elements ---
-  var banner = document.createElement('div');
-  banner.id = '__dashsnap_macro_banner';
-  banner.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:13px system-ui;padding:10px 20px;border-radius:10px;border:2px solid #7C5CFC;pointer-events:auto;box-shadow:0 4px 20px rgba(0,0,0,0.4);display:flex;align-items:center;gap:10px;';
-  document.body.appendChild(banner);
-
-  var highlight = document.createElement('div');
-  highlight.id = '__dashsnap_macro_highlight';
-  highlight.style.cssText = 'position:fixed;z-index:2147483647;border:2px solid #7C5CFC;background:rgba(124,92,252,0.08);border-radius:3px;pointer-events:none;display:none;transition:all 0.05s ease;';
-  document.body.appendChild(highlight);
-
-  var tooltip = document.createElement('div');
-  tooltip.id = '__dashsnap_macro_tooltip';
-  tooltip.style.cssText = 'position:fixed;z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:12px system-ui;padding:6px 10px;border-radius:6px;border:1px solid #7C5CFC;pointer-events:none;display:none;max-width:250px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
-  document.body.appendChild(tooltip);
+  // Order matters: shield first, then highlight/tooltip, then banner on top
+  // Banner must be last so it's above everything and receives clicks directly.
 
   // Full-screen transparent click interceptor — catches ALL clicks reliably
   var clickShield = document.createElement('div');
   clickShield.id = '__dashsnap_click_shield';
-  clickShield.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:2147483646;cursor:crosshair;background:transparent;';
+  clickShield.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:2147483645;cursor:crosshair;background:transparent;';
   document.body.appendChild(clickShield);
+
+  var highlight = document.createElement('div');
+  highlight.id = '__dashsnap_macro_highlight';
+  highlight.style.cssText = 'position:fixed;z-index:2147483646;border:2px solid #7C5CFC;background:rgba(124,92,252,0.08);border-radius:3px;pointer-events:none;display:none;transition:all 0.05s ease;';
+  document.body.appendChild(highlight);
+
+  var tooltip = document.createElement('div');
+  tooltip.id = '__dashsnap_macro_tooltip';
+  tooltip.style.cssText = 'position:fixed;z-index:2147483646;background:#1C1A29;color:#EEEDF5;font:12px system-ui;padding:6px 10px;border-radius:6px;border:1px solid #7C5CFC;pointer-events:none;display:none;max-width:250px;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+  document.body.appendChild(tooltip);
+
+  var banner = document.createElement('div');
+  banner.id = '__dashsnap_macro_banner';
+  banner.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#1C1A29;color:#EEEDF5;font:13px system-ui;padding:10px 20px;border-radius:10px;border:2px solid #7C5CFC;pointer-events:auto;box-shadow:0 4px 20px rgba(0,0,0,0.4);display:flex;align-items:center;gap:10px;';
+  document.body.appendChild(banner);
 
   function flashElement(el) {
     var flash = document.createElement('div');
@@ -712,18 +716,30 @@ const MACRO_OVERLAY_JS = `
     if (cs) cs.textContent = count + ' action' + (count !== 1 ? 's' : '');
   }
 
-  // Done button — banner sits above the shield, so handle clicks directly on it
+  // Done button — direct listener on the button element for maximum reliability
+  var doneBtn = banner.querySelector('#__ds_done_btn');
+  function handleDone(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    if (window.__dashsnap_macro_actions.length > 0) {
+      window.__dashsnap_macro_done = true;
+      cleanup();
+    } else {
+      banner.style.borderColor = '#EF4444';
+      banner.style.transition = 'border-color 0.3s';
+      setTimeout(function() { banner.style.borderColor = '#7C5CFC'; }, 800);
+    }
+  }
+  if (doneBtn) {
+    doneBtn.addEventListener('mousedown', handleDone, true);
+    doneBtn.addEventListener('click', handleDone, true);
+  }
+  // Fallback: delegated handler on banner
   banner.addEventListener('click', function(e) {
     var target = e.target;
     if (target.id === '__ds_done_btn' || (target.closest && target.closest('#__ds_done_btn'))) {
-      if (window.__dashsnap_macro_actions.length > 0) {
-        window.__dashsnap_macro_done = true;
-        cleanup();
-      } else {
-        banner.style.borderColor = '#EF4444';
-        banner.style.transition = 'border-color 0.3s';
-        setTimeout(function() { banner.style.borderColor = '#7C5CFC'; }, 800);
-      }
+      handleDone(e);
     }
   });
 
@@ -965,10 +981,15 @@ const MACRO_OVERLAY_JS = `
         e.stopImmediatePropagation();
         var rect = lastEl.getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
+          var sInfo = { selector: '', strategy: 'none' };
+          try { sInfo = getBestSelector(lastEl); } catch(ex) { console.warn('getBestSelector failed:', ex); }
           var snapAction = {
             action: 'snap',
             label: 'Snap: ' + getLabel(lastEl),
+            selector: sInfo.selector || '',
+            selectorStrategy: sInfo.strategy || 'none',
             snapRegion: { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
+            recordedViewport: { width: window.innerWidth, height: window.innerHeight },
           };
           window.__dashsnap_macro_actions.push(snapAction);
           console.log('__DASHSNAP_ACTION__' + JSON.stringify(snapAction));
@@ -1022,6 +1043,7 @@ const MACRO_OVERLAY_JS = `
               action: 'snap',
               label: 'Snap region ' + rw + 'x' + rh,
               snapRegion: { x: Math.round(rx), y: Math.round(ry), width: Math.round(rw), height: Math.round(rh) },
+              recordedViewport: { width: window.innerWidth, height: window.innerHeight },
             };
             window.__dashsnap_macro_actions.push(regionAction);
             console.log('__DASHSNAP_ACTION__' + JSON.stringify(regionAction));
@@ -1235,6 +1257,26 @@ export class Recorder {
         if (result) {
           this.stopPolling();
           await this.view.webContents.executeJavaScript('window.__dashsnap_result = null;');
+          // Capture a preview screenshot if we have a rect (for snap steps)
+          if (result.rect && result.rect.width > 0 && result.rect.height > 0) {
+            try {
+              const image = await this.view.webContents.capturePage({
+                x: result.rect.x,
+                y: result.rect.y,
+                width: result.rect.width,
+                height: result.rect.height,
+              });
+              this._previewCounter++;
+              const safeName = this.sanitizeLabel(String(result.label || 'capture'));
+              const filename = `preview_${safeName}_${this._previewCounter}.png`;
+              const filePath = path.join(this._previewDir, filename);
+              fs.writeFileSync(filePath, image.toPNG());
+              result.previewPath = filePath;
+              console.log('[Snap] Preview captured:', filePath);
+            } catch (err) {
+              console.error('[Snap] Preview capture failed:', err);
+            }
+          }
           this.window.webContents.send('recorder:element-picked', result);
         }
       } catch {
@@ -1262,6 +1304,22 @@ export class Recorder {
         if (result) {
           this.stopPolling();
           await this.view.webContents.executeJavaScript('window.__dashsnap_snap_result = null;');
+          // Capture a preview screenshot for the drawn region
+          if (result.width > 0 && result.height > 0) {
+            try {
+              const image = await this.view.webContents.capturePage({
+                x: result.x, y: result.y, width: result.width, height: result.height,
+              });
+              this._previewCounter++;
+              const filename = `preview_region_${this._previewCounter}.png`;
+              const filePath = path.join(this._previewDir, filename);
+              fs.writeFileSync(filePath, image.toPNG());
+              result.previewPath = filePath;
+              console.log('[Snap] Region preview captured:', filePath);
+            } catch (err) {
+              console.error('[Snap] Region preview capture failed:', err);
+            }
+          }
           this.window.webContents.send('recorder:region-selected', result);
         }
       } catch {

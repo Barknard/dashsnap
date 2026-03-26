@@ -94,7 +94,7 @@ export function FlowMenu() {
                     <DropdownMenu.Item
                       key={f.id}
                       onClick={() => setActiveFlow(f.id)}
-                      className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-surface-hover outline-none"
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-accent/10 hover:text-ds-accent outline-none"
                     >
                       {f.id === activeFlowId && <Check className="w-3 h-3 text-ds-accent" />}
                       {f.id !== activeFlowId && <div className="w-3" />}
@@ -109,7 +109,7 @@ export function FlowMenu() {
               {/* Actions */}
               <DropdownMenu.Item
                 onClick={() => setShowNewDialog(true)}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-surface-hover outline-none"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-accent/10 hover:text-ds-accent outline-none"
               >
                 <Plus className="w-3.5 h-3.5 text-ds-text-muted" />
                 New Report
@@ -117,7 +117,7 @@ export function FlowMenu() {
 
               <DropdownMenu.Item
                 onClick={() => duplicateFlow(activeFlow.id)}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-surface-hover outline-none"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-accent/10 hover:text-ds-accent outline-none"
               >
                 <Copy className="w-3.5 h-3.5 text-ds-text-muted" />
                 Duplicate
@@ -125,7 +125,7 @@ export function FlowMenu() {
 
               <DropdownMenu.Item
                 onClick={() => exportFlow(activeFlow.id)}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-surface-hover outline-none"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-accent/10 hover:text-ds-accent outline-none"
               >
                 <Download className="w-3.5 h-3.5 text-ds-text-muted" />
                 Export Report
@@ -133,7 +133,7 @@ export function FlowMenu() {
 
               <DropdownMenu.Item
                 onClick={() => importFlow()}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-surface-hover outline-none"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-ds-text cursor-pointer hover:bg-ds-accent/10 hover:text-ds-accent outline-none"
               >
                 <Upload className="w-3.5 h-3.5 text-ds-text-muted" />
                 Import Report

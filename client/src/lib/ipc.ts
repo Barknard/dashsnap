@@ -333,4 +333,20 @@ export const app = {
     if (!isElectron) return;
     return window.dashsnap!.invoke('app:open-external', url);
   },
+  getFlowScreenshots: async (flowName: string): Promise<Array<{ filename: string; dataUrl: string }>> => {
+    if (!isElectron) return [];
+    return (await window.dashsnap!.invoke('app:get-flow-screenshots', flowName)) as Array<{ filename: string; dataUrl: string }>;
+  },
+  readImage: async (filePath: string): Promise<string | null> => {
+    if (!isElectron) return null;
+    return (await window.dashsnap!.invoke('app:read-image', filePath)) as string | null;
+  },
+  getWindowSize: async (): Promise<{ width: number; height: number } | null> => {
+    if (!isElectron) return null;
+    return (await window.dashsnap!.invoke('app:get-window-size')) as { width: number; height: number } | null;
+  },
+  resizeWindow: async (size: { width: number; height: number }) => {
+    if (!isElectron) return;
+    return window.dashsnap!.invoke('app:resize-window', size);
+  },
 };

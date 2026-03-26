@@ -50,10 +50,13 @@ process.on('uncaughtException', (err) => {
   }
 });
 
-// ─── Disable GPU cache (Windows permission issues) ──────────────────────────
+// ─── Speed up startup + disable GPU cache (Windows permission issues) ────────
 
 app.commandLine.appendSwitch('disable-gpu-cache');
 app.commandLine.appendSwitch('disable-software-rasterizer');
+app.commandLine.appendSwitch('disable-gpu-sandbox');       // faster GPU init on Windows
+app.commandLine.appendSwitch('disable-renderer-backgrounding'); // don't throttle splash
+app.commandLine.appendSwitch('enable-features', 'SharedArrayBuffer');
 
 // ─── Register dsfile:// protocol for serving local images to renderer ───────
 
@@ -107,7 +110,7 @@ function showSplash(): Promise<void> {
       center: true,
       skipTaskbar: false,
       transparent: false,
-      show: false,            // show after content is painted
+      show: true,             // show IMMEDIATELY — dark bg appears while HTML loads
       backgroundColor: '#13111C',
       webPreferences: {
         contextIsolation: true,
@@ -122,11 +125,13 @@ function showSplash(): Promise<void> {
       splashWindow.loadFile(path.join(__dirname, '../dist/splash.html'));
     }
 
-    // Show and resolve once the HTML is painted
+    // Resolve once the HTML content is painted (splash is already visible)
     splashWindow.once('ready-to-show', () => {
-      splashWindow?.show();
       resolve();
     });
+
+    // Fallback: resolve after 200ms even if ready-to-show hasn't fired
+    setTimeout(resolve, 200);
 
     splashWindow.once('closed', () => { splashWindow = null; });
   });
@@ -136,13 +141,16 @@ function closeSplash() {
   if (splashWindow && !splashWindow.isDestroyed()) {
     splashProgress(100, 'Ready!');
     splashWindow.webContents.send('splash:closing');
-    // Wait for fade-out animation then close
+    // Wait for fade-out animation then close, then focus main window
     setTimeout(() => {
       if (splashWindow && !splashWindow.isDestroyed()) {
         splashWindow.close();
         splashWindow = null;
       }
-    }, 350);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.focus();
+      }
+    }, 400);
   }
 }
 
@@ -249,10 +257,17 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
+  // Wait for BOTH the main window AND the React app to fully render
+  // before showing anything — splash stays visible the entire time
   mainWindow.once('ready-to-show', () => {
-    mainWindow!.show();
-    // Close splash after a short delay so the main window is fully painted
-    setTimeout(closeSplash, 500);
+    // Give React a moment to mount and paint
+    setTimeout(() => {
+      splashProgress(95, 'Almost ready...');
+      // Show main window BEHIND the splash (splash is alwaysOnTop)
+      mainWindow!.showInactive();
+      // Brief pause so the main window fully paints, then fade out splash
+      setTimeout(closeSplash, 400);
+    }, 300);
   });
 
   // ─── Window events ────────────────────────────────────────────────────
@@ -362,6 +377,78 @@ function setupIPC() {
   ipcMain.on('recorder:start-macro', () => recorder?.startMacroRecording());
   ipcMain.on('recorder:stop', () => recorder?.stop());
 
+  // Read a local image file and return it as a base64 data URL
+  ipcMain.handle('app:read-image', (_e, filePath: string) => {
+    try {
+      const resolved = path.resolve(filePath);
+      if (!fs.existsSync(resolved)) return null;
+      const data = fs.readFileSync(resolved);
+      return `data:image/png;base64,${data.toString('base64')}`;
+    } catch {
+      return null;
+    }
+  });
+
+  // Find latest screenshots for a flow by name prefix, return as base64 data URLs
+  ipcMain.handle('app:get-flow-screenshots', (_e, flowName: string) => {
+    try {
+      const outputDir = configManager?.loadSettings()?.outputPath ||
+        path.join(getAppDataPath(), 'output');
+      if (!fs.existsSync(outputDir)) return [];
+      const prefix = flowName.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').toLowerCase();
+      const allPngs = fs.readdirSync(outputDir)
+        .filter(f => f.toLowerCase().startsWith(prefix.toLowerCase()) && f.endsWith('.png'))
+        .sort()
+        .reverse(); // newest first by timestamp in filename
+
+      // Group by timestamp (format: prefix_label_YYYYMMDD_HHMMSS_NN.png) — take latest batch
+      const latestBatch: string[] = [];
+      let batchTimestamp = '';
+      for (const f of allPngs) {
+        const match = f.match(/_(\d{8}_\d{6})_/);
+        if (!match) continue;
+        const ts = match[1];
+        if (!batchTimestamp) batchTimestamp = ts;
+        if (ts === batchTimestamp) {
+          latestBatch.push(f);
+        } else {
+          break; // different timestamp = previous batch
+        }
+      }
+
+      // Sort by sequence number (last _NN before .png)
+      latestBatch.sort((a, b) => {
+        const na = parseInt(a.match(/_(\d+)\.png$/)?.[1] || '0');
+        const nb = parseInt(b.match(/_(\d+)\.png$/)?.[1] || '0');
+        return na - nb;
+      });
+
+      return latestBatch.map(f => {
+        const data = fs.readFileSync(path.join(outputDir, f));
+        return {
+          filename: f,
+          dataUrl: `data:image/png;base64,${data.toString('base64')}`,
+        };
+      });
+    } catch {
+      return [];
+    }
+  });
+
+  // Get current window size (for saving with flow recordings)
+  ipcMain.handle('app:get-window-size', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return null;
+    const bounds = mainWindow.getBounds();
+    return { width: bounds.width, height: bounds.height };
+  });
+
+  // Resize window to match recorded size before playback
+  ipcMain.handle('app:resize-window', (_e, size: { width: number; height: number }) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.setSize(size.width, size.height, true);
+    positionBrowserView();
+  });
+
   // Flow management
   ipcMain.handle('flow:save', (_e, config) => configManager?.saveFlows(config));
   ipcMain.handle('flow:load', () => configManager?.loadFlows());
@@ -396,9 +483,20 @@ function setupIPC() {
   // Flow execution
   ipcMain.on('flow:run', (_e, flowId: string) => {
     const flows = configManager?.loadFlows();
-    const flow = flows?.flows?.find((f: { id: string; name: string }) => f.id === flowId);
+    const flow = flows?.flows?.find((f: { id: string; name: string; recordedWindowSize?: { width: number; height: number } }) => f.id === flowId);
     auditLogger?.log({ action: 'flow-run', flowId, flowName: flow?.name });
-    flowRunner?.run(flowId);
+
+    // Restore window to the size it was recorded at for pixel-perfect captures
+    if (flow?.recordedWindowSize && mainWindow && !mainWindow.isDestroyed()) {
+      const { width, height } = flow.recordedWindowSize;
+      console.log(`[Playback] Restoring window to recorded size: ${width}x${height}`);
+      mainWindow.setSize(width, height, true);
+      positionBrowserView();
+      // Small delay for resize to settle before starting playback
+      setTimeout(() => flowRunner?.run(flowId), 300);
+    } else {
+      flowRunner?.run(flowId);
+    }
   });
   ipcMain.on('flow:run-step', (_e, flowId: string, stepIndex: number) =>
     flowRunner?.runSingleStep(flowId, stepIndex));
@@ -875,8 +973,12 @@ function purgeOldOutputs() {
 
 // ─── App lifecycle ──────────────────────────────────────────────────────────
 
-// Show splash immediately, wait for it to paint, THEN load heavy modules
+// Show splash as the VERY first thing after ready — no other work before it
 app.whenReady().then(async () => {
+  // Splash FIRST — before anything else
+  await showSplash();
+  splashProgress(5, 'Starting up...');
+
   // Handle dsfile:// protocol — serves local PNG files to the renderer
   protocol.handle('dsfile', (request) => {
     // dsfile:///C:/path/to/file.png → local file path
@@ -884,22 +986,21 @@ app.whenReady().then(async () => {
     // Strip leading slash for Windows paths (e.g., /C:/Users → C:/Users)
     const localPath = path.resolve(rawPath.replace(/^\/([a-zA-Z]:)/, '$1'));
 
-    // Restrict to output directory to prevent arbitrary file access
+    // Restrict to output directory and temp preview directory to prevent arbitrary file access
+    // Normalize all paths to lowercase with forward slashes for consistent comparison on Windows
+    const norm = (p: string) => p.replace(/\\/g, '/').toLowerCase();
     const outputDir = path.resolve(
       configManager?.loadSettings()?.outputPath || path.join(getAppDataPath(), 'output')
     );
-    if (!localPath.startsWith(outputDir)) {
-      console.warn('[Security] Blocked dsfile:// access outside output dir:', localPath);
+    const previewDir = path.resolve(path.join(app.getPath('temp'), 'dashsnap-previews'));
+    const normLocal = norm(localPath);
+    if (!normLocal.startsWith(norm(outputDir)) && !normLocal.startsWith(norm(previewDir))) {
+      console.warn('[Security] Blocked dsfile:// access outside allowed dirs:', localPath, '| outputDir:', outputDir, '| previewDir:', previewDir);
       return new Response('Forbidden', { status: 403 });
     }
 
     return net.fetch(`file://${localPath}`);
   });
-
-  await showSplash();
-
-  // Yield one tick so the splash is fully visible before blocking with imports
-  await new Promise(r => setTimeout(r, 50));
 
   splashProgress(10, 'Loading configuration...');
   setupIPC();

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Images, Monitor, Presentation } from 'lucide-react';
+import { Images, Monitor, Presentation, Camera } from 'lucide-react';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { Header } from './components/Header';
 import { UrlBar } from './components/UrlBar';
@@ -50,10 +50,9 @@ export default function App() {
   const [showOutput, setShowOutput] = useState(false);
   const [selectedSlideId, setSelectedSlideId] = useState<string | null>(null);
 
-  // Derive the selected slide for the canvas
-  const selectedSlide = activeFlow
-    ? deriveSlides(activeFlow.steps).slides.find(s => s.id === selectedSlideId) || null
-    : null;
+  // Derive all slides and the selected one
+  const allSlides = activeFlow ? deriveSlides(activeFlow.steps).slides : [];
+  const selectedSlide = allSlides.find(s => s.id === selectedSlideId) || null;
 
   // When a slide is selected, just track it (tab switching is separate)
   const handleSlideSelected = useCallback((slideId: string | null) => {
@@ -75,6 +74,13 @@ export default function App() {
       setMainTab('browser');
     }
   }, [activeFlowId, setMainTab]);
+
+  // Auto-select first slide when switching to slides tab or when slides change
+  useEffect(() => {
+    if (mainTab === 'slides' && allSlides.length > 0 && !selectedSlide) {
+      setSelectedSlideId(allSlides[0].id);
+    }
+  }, [mainTab, allSlides, selectedSlide]);
 
   // Auto-switch tabs on run start / complete
   useEffect(() => {
@@ -115,7 +121,7 @@ export default function App() {
 
   // Listen for recorded elements
   useEffect(() => {
-    const handleElementPicked = (data: { selector: string; label: string; strategy: string; xy: [number, number]; rect?: { x: number; y: number; width: number; height: number } }) => {
+    const handleElementPicked = (data: { selector: string; label: string; strategy: string; xy: [number, number]; rect?: { x: number; y: number; width: number; height: number }; viewport?: { width: number; height: number }; previewPath?: string }) => {
       const currentRecordingType = useAppStore.getState().recordingType;
       stopRecording();
 
@@ -128,7 +134,11 @@ export default function App() {
           type: 'SNAP',
           id: generateId('step'),
           label: data.label || 'Screenshot',
+          selector: data.selector,
+          selectorStrategy: data.strategy,
           region: data.rect,
+          recordedViewport: data.viewport,
+          previewPath: data.previewPath,
         } as SnapStep;
       } else if (currentRecordingType === 'hover') {
         step = {
@@ -200,13 +210,14 @@ export default function App() {
       toast.success(`Recorded: ${step.label}`);
     };
 
-    const handleRegionSelected = (data: { x: number; y: number; width: number; height: number }) => {
+    const handleRegionSelected = (data: { x: number; y: number; width: number; height: number; previewPath?: string }) => {
       stopRecording();
       const step: SnapStep = {
         type: 'SNAP',
         id: generateId('step'),
         label: 'Screenshot',
         region: data,
+        previewPath: data.previewPath,
       };
       addStep(step);
       toast.success(`Recorded: ${step.label}`);
@@ -245,7 +256,7 @@ export default function App() {
       toast.success(`Recorded: ${step.label}`);
     };
 
-    const handleMacroRecorded = (actions: Array<{ selector?: string; selectorStrategy?: string; fallbackXY?: [number, number]; label?: string; action: string; value?: string; scrollTarget?: { x: number; y: number; isPage: boolean }; snapRegion?: { x: number; y: number; width: number; height: number }; previewPath?: string; elementMeta?: { tagName: string; inputType?: string; placeholder?: string; options?: string[] } }>, startUrl: string) => {
+    const handleMacroRecorded = (actions: Array<{ selector?: string; selectorStrategy?: string; fallbackXY?: [number, number]; label?: string; action: string; value?: string; scrollTarget?: { x: number; y: number; isPage: boolean }; snapRegion?: { x: number; y: number; width: number; height: number }; recordedViewport?: { width: number; height: number }; previewPath?: string; elementMeta?: { tagName: string; inputType?: string; placeholder?: string; options?: string[] } }>, startUrl: string) => {
       stopRecording();
 
       if (!actions || actions.length === 0) {
@@ -337,7 +348,10 @@ export default function App() {
               type: 'SNAP',
               id: generateId('step'),
               label: action.label || 'Screenshot',
+              selector: action.selector,
+              selectorStrategy: action.selectorStrategy,
               region: action.snapRegion || { x: 0, y: 0, width: 100, height: 100 },
+              recordedViewport: action.recordedViewport,
               previewPath: action.previewPath,
               group: groupId,
             } as FlowStep;
@@ -386,7 +400,26 @@ export default function App() {
 
   // Listen for flow progress
   useEffect(() => {
-    const handler = (progress: unknown) => setRunProgress(progress as RunProgress);
+    const handler = (progress: unknown) => {
+      const p = progress as RunProgress;
+      setRunProgress(p);
+      // Update SNAP step previewPaths from run results so slides show the actual screenshots
+      if (p.status === 'complete' && p.results) {
+        // Read fresh from store to avoid stale closure
+        const flow = useFlowStore.getState().getActiveFlow();
+        if (flow) {
+          for (const result of p.results) {
+            if (result.screenshotPath && result.stepId) {
+              const step = flow.steps.find(s => s.id === result.stepId);
+              if (step && step.type === 'SNAP') {
+                console.log('[Slides] Updating previewPath for', result.stepId, '→', result.screenshotPath);
+                useFlowStore.getState().updateStep(result.stepId, { previewPath: result.screenshotPath } as Partial<FlowStep>);
+              }
+            }
+          }
+        }
+      }
+    };
     flowIpc.onProgress(handler);
     return () => flowIpc.offProgress(handler as (...args: unknown[]) => void);
   }, [setRunProgress]);
@@ -472,8 +505,8 @@ export default function App() {
                 className={cn(
                   'flex items-center gap-1.5 px-4 h-full text-xs font-medium border-b-2 transition-colors',
                   mainTab === 'browser'
-                    ? 'border-ds-accent text-ds-accent bg-ds-accent/5'
-                    : 'border-transparent text-ds-text-muted hover:text-ds-text hover:bg-ds-surface/50',
+                    ? 'border-ds-accent text-ds-accent bg-ds-accent/10 font-semibold'
+                    : 'border-transparent text-ds-text-muted bg-ds-surface/30 hover:text-ds-text hover:bg-ds-surface-hover hover:border-ds-border',
                 )}
               >
                 <Monitor className="w-3.5 h-3.5" />
@@ -487,8 +520,8 @@ export default function App() {
                 className={cn(
                   'flex items-center gap-1.5 px-4 h-full text-xs font-medium border-b-2 transition-colors',
                   mainTab === 'slides'
-                    ? 'border-ds-emerald text-ds-emerald bg-ds-emerald/5'
-                    : 'border-transparent text-ds-text-muted hover:text-ds-text hover:bg-ds-surface/50',
+                    ? 'border-ds-emerald text-ds-emerald bg-ds-emerald/10 font-semibold'
+                    : 'border-transparent text-ds-text-muted bg-ds-surface/30 hover:text-ds-text hover:bg-ds-surface-hover hover:border-ds-border',
                 )}
               >
                 <Presentation className="w-3.5 h-3.5" />
@@ -502,20 +535,55 @@ export default function App() {
             </div>
 
             {/* Content area */}
-            <div className="flex-1 min-h-0 relative">
+            <div className="flex-1 min-h-0 relative flex flex-col">
               {mainTab === 'slides' ? (
-                selectedSlide ? (
-                  <SlideCanvas
-                    slide={selectedSlide}
-                    globalLayout={globalLayout}
-                    onUpdateStep={updateStep}
-                  />
+                allSlides.length > 0 ? (
+                  <>
+                    {/* Slide sub-tabs */}
+                    {allSlides.length > 1 && (
+                      <div className="flex items-center gap-1 px-3 py-1.5 border-b border-ds-border/50 bg-ds-surface/30 shrink-0 overflow-x-auto">
+                        {allSlides.map((slide) => (
+                          <button
+                            key={slide.id}
+                            onClick={() => setSelectedSlideId(slide.id)}
+                            className={cn(
+                              'flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap',
+                              selectedSlideId === slide.id
+                                ? 'bg-ds-emerald/15 text-ds-emerald border border-ds-emerald/30'
+                                : 'text-ds-text-muted hover:text-ds-text hover:bg-ds-surface-hover border border-transparent',
+                            )}
+                          >
+                            <Camera className="w-3 h-3" />
+                            Slide {slide.slideIndex + 1}
+                            {slide.captureStep.previewPath && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-ds-emerald" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {/* Slide canvas */}
+                    <div className="flex-1 min-h-0">
+                      {selectedSlide ? (
+                        <SlideCanvas
+                          slide={selectedSlide}
+                          globalLayout={globalLayout}
+                          flowName={activeFlowName}
+                          onUpdateStep={updateStep}
+                        />
+                      ) : (
+                        <div className="h-full flex items-center justify-center bg-ds-bg">
+                          <p className="text-sm text-ds-text-dim">Select a slide above</p>
+                        </div>
+                      )}
+                    </div>
+                  </>
                 ) : (
-                  <div className="h-full flex items-center justify-center bg-ds-bg">
+                  <div className="flex-1 flex items-center justify-center bg-ds-bg">
                     <div className="text-center space-y-2 opacity-40">
                       <Presentation className="w-10 h-10 mx-auto text-ds-text-dim" />
-                      <p className="text-sm text-ds-text-dim">No slide selected</p>
-                      <p className="text-xs text-ds-text-dim">Select a slide in the sidebar or record a capture</p>
+                      <p className="text-sm text-ds-text-dim">No slides yet</p>
+                      <p className="text-xs text-ds-text-dim">Record captures to create slides</p>
                     </div>
                   </div>
                 )

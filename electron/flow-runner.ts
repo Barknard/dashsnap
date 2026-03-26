@@ -486,16 +486,32 @@ export class FlowRunner {
   }
 
   private async executeSnap(
-    step: { region: { x: number; y: number; width: number; height: number }; fullPage?: boolean; label?: string },
+    step: { selector?: string; selectorStrategy?: string; region: { x: number; y: number; width: number; height: number }; recordedViewport?: { width: number; height: number }; fullPage?: boolean; label?: string },
     outputDir: string,
     index: number,
   ): Promise<string | null> {
     try {
+      // Priority: 1) element selector → 2) proportional viewport scaling → 3) raw pixels
+      let region = step.region;
+      let resolved = false;
+      if (step.selector) {
+        const freshRegion = await this.resolveElementRegion(step.selector);
+        if (freshRegion) {
+          region = freshRegion;
+          resolved = true;
+          console.log(`[Playback] Snap resolved selector "${step.selector}" → ${region.width}×${region.height} at (${region.x},${region.y})`);
+        } else {
+          console.warn(`[Playback] Snap selector "${step.selector}" not found, trying viewport scaling`);
+        }
+      }
+      if (!resolved) {
+        region = await this.scaleRegionToCurrentViewport(region, step.recordedViewport);
+      }
       const image = await this.view.webContents.capturePage({
-        x: step.region.x,
-        y: step.region.y,
-        width: step.region.width,
-        height: step.region.height,
+        x: region.x,
+        y: region.y,
+        width: region.width,
+        height: region.height,
       });
 
       // Build meaningful filename: <flow>_<label>_<timestamp>_<index>[_vars].png
@@ -510,6 +526,66 @@ export class FlowRunner {
     } catch (err) {
       console.error('Screenshot failed:', err);
       return null;
+    }
+  }
+
+  /** Resolve an element selector (CSS or xpath) to its current bounding rect.
+   *  Scrolls the element into view first so capturePage() can see it. */
+  private async resolveElementRegion(selector: string): Promise<{ x: number; y: number; width: number; height: number } | null> {
+    if (!selector) return null;
+    try {
+      const result = await this.view.webContents.executeJavaScript(`
+        (function() {
+          var sel = ${JSON.stringify(selector)};
+          var el = null;
+          if (sel.startsWith('xpath:')) {
+            var xpath = sel.substring(6);
+            var xr = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+            el = xr.singleNodeValue;
+          } else {
+            try { el = document.querySelector(sel); } catch(e) { return null; }
+          }
+          if (!el) return null;
+          // Scroll element into view so it's visible in the viewport for capturePage()
+          el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+          var r = el.getBoundingClientRect();
+          if (r.width <= 0 || r.height <= 0) return null;
+          return { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
+        })()
+      `);
+      // Small delay after scroll for the page to settle/repaint
+      if (result) await this.delay(200);
+      return result;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Scale a pixel region proportionally from recorded viewport to current viewport */
+  private async scaleRegionToCurrentViewport(
+    region: { x: number; y: number; width: number; height: number },
+    recordedViewport?: { width: number; height: number },
+  ): Promise<{ x: number; y: number; width: number; height: number }> {
+    if (!recordedViewport || recordedViewport.width <= 0 || recordedViewport.height <= 0) return region;
+    try {
+      const currentViewport = await this.view.webContents.executeJavaScript(
+        '({ width: window.innerWidth, height: window.innerHeight })'
+      );
+      if (!currentViewport || currentViewport.width <= 0 || currentViewport.height <= 0) return region;
+      const scaleX = currentViewport.width / recordedViewport.width;
+      const scaleY = currentViewport.height / recordedViewport.height;
+      // If viewport hasn't changed meaningfully (<2% diff), skip scaling to avoid rounding drift
+      if (Math.abs(scaleX - 1) < 0.02 && Math.abs(scaleY - 1) < 0.02) return region;
+      const scaled = {
+        x: Math.round(region.x * scaleX),
+        y: Math.round(region.y * scaleY),
+        width: Math.round(region.width * scaleX),
+        height: Math.round(region.height * scaleY),
+      };
+      console.log(`[Playback] Scaled region from ${recordedViewport.width}×${recordedViewport.height} → ${currentViewport.width}×${currentViewport.height} (${scaleX.toFixed(2)}x, ${scaleY.toFixed(2)}y)`);
+      return scaled;
+    } catch {
+      return region;
     }
   }
 
@@ -891,11 +967,27 @@ export class FlowRunner {
         case 'snap': {
           if (action.snapRegion && outputDir && screenshots) {
             try {
+              // Priority: 1) element selector → 2) proportional viewport scaling → 3) raw pixels
+              let snapRegion = action.snapRegion;
+              let resolved = false;
+              if (action.selector) {
+                const freshRegion = await this.resolveElementRegion(action.selector);
+                if (freshRegion) {
+                  snapRegion = freshRegion;
+                  resolved = true;
+                  console.log(`[Macro] Snap resolved selector "${action.selector}" → ${snapRegion.width}×${snapRegion.height}`);
+                } else {
+                  console.warn(`[Macro] Snap selector "${action.selector}" not found, trying viewport scaling`);
+                }
+              }
+              if (!resolved) {
+                snapRegion = await this.scaleRegionToCurrentViewport(snapRegion, action.recordedViewport);
+              }
               const image = await wc.capturePage({
-                x: action.snapRegion.x,
-                y: action.snapRegion.y,
-                width: action.snapRegion.width,
-                height: action.snapRegion.height,
+                x: snapRegion.x,
+                y: snapRegion.y,
+                width: snapRegion.width,
+                height: snapRegion.height,
               });
               const safeName = this.sanitizeLabel(action.label || 'capture');
               const varSuffix = Object.keys(this.currentVariables).length > 0

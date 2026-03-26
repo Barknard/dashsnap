@@ -431,6 +431,7 @@ export function RecordPanel({ onEditStep, onShowOutput, onSlideSelected }: Recor
                         slide={slide}
                         slideNumber={slide.slideIndex + 1}
                         isSelected={selectedSlideId === slide.id}
+                        flowName={activeFlow?.name}
                         runStatus={runResultsMap?.get(slide.id)}
                         onSelect={() => setSelectedSlideId(slide.id)}
                         onDelete={(id) => setDeleteStepId(id)}

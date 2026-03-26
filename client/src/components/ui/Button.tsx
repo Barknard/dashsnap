@@ -18,9 +18,9 @@ const buttonVariants = cva(
         destructive:
           'bg-ds-red/15 text-ds-red border border-ds-red/30 hover:bg-ds-red/25 active:scale-[0.98]',
         outline:
-          'border border-ds-border bg-transparent text-ds-text hover:bg-ds-surface-hover hover:border-ds-border-bright',
+          'border border-ds-border bg-ds-surface/40 text-ds-text hover:bg-ds-accent/10 hover:border-ds-accent/40 hover:text-ds-accent',
         ghost:
-          'text-ds-text-muted hover:bg-ds-surface-hover hover:text-ds-text',
+          'text-ds-text-muted bg-ds-surface/50 border border-ds-border/50 hover:bg-ds-surface-hover hover:text-ds-text hover:border-ds-border-bright',
         link:
           'text-ds-accent underline-offset-4 hover:underline p-0 h-auto',
       },

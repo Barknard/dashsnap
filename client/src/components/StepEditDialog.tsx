@@ -190,7 +190,20 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
             {/* SNAP specific (Fix #9: editable region) */}
             {step.type === 'SNAP' && (
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-ds-text-muted">Region</label>
+                {step.selector && (
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-ds-text-muted">Element Selector</label>
+                    <p className="text-xs font-mono text-ds-text bg-ds-bg rounded px-2 py-1.5 break-all">
+                      {step.selector}
+                    </p>
+                    <p className="text-xs text-ds-text-dim">
+                      Strategy: {step.selectorStrategy || 'unknown'} — resolved to fresh bounds at playback.
+                    </p>
+                  </div>
+                )}
+                <label className="text-xs font-medium text-ds-text-muted">
+                  {step.selector ? 'Fallback Region' : 'Region'} (pixels)
+                </label>
                 <div className="grid grid-cols-4 gap-2 text-center">
                   {(['x', 'y', 'width', 'height'] as const).map(key => (
                     <div key={key} className="space-y-1">
@@ -206,7 +219,9 @@ export function StepEditDialog({ step, onClose }: StepEditDialogProps) {
                   ))}
                 </div>
                 <p className="text-xs text-ds-text-dim">
-                  {snapRegion.width}x{snapRegion.height}px capture area.
+                  {step.selector
+                    ? `Fallback ${snapRegion.width}×${snapRegion.height}px — used only if selector can't be found.`
+                    : `${snapRegion.width}×${snapRegion.height}px capture area.`}
                 </p>
               </div>
             )}

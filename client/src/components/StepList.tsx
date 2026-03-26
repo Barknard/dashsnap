@@ -77,7 +77,7 @@ function stepDetail(step: FlowStep): string {
       return truncate(step.selector, 40) + strat;
     }
     case 'WAIT': return `${step.seconds} seconds`;
-    case 'SNAP': return `${step.region.width}×${step.region.height}px region`;
+    case 'SNAP': return step.selector ? truncate(step.selector, 40) : `${step.region.width}×${step.region.height}px region (pixel)`;
     case 'NAVIGATE': return truncate(step.url, 40);
     case 'SCROLL': return `Position (${step.x}, ${step.y})`;
     case 'HOVER': return truncate(step.selector, 40);

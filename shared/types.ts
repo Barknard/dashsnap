@@ -23,7 +23,10 @@ export interface SnapStep {
   type: 'SNAP';
   id: string;
   label: string;
-  region: { x: number; y: number; width: number; height: number };
+  selector?: string;                    // element selector — resolved at playback for fresh bounds
+  selectorStrategy?: string;            // how the selector was derived (aria-label, id, css-combo, etc.)
+  region: { x: number; y: number; width: number; height: number };  // fallback pixel region (scaled proportionally at playback)
+  recordedViewport?: { width: number; height: number };  // viewport size when recorded — used to scale region proportionally
   fullPage?: boolean;
   slideLayout?: PptxLayout;
   previewPath?: string;      // absolute path to live preview PNG captured during recording
@@ -138,6 +141,7 @@ export interface MacroAction {
     width: number;
     height: number;
   };
+  recordedViewport?: { width: number; height: number };  // viewport when recorded
   slideLayout?: PptxLayout;  // optional per-snap slide layout
   previewPath?: string;      // preview screenshot captured during recording
   elementMeta?: {
@@ -174,6 +178,7 @@ export interface Flow {
   updatedAt: string;
   steps: FlowStep[];
   variables?: FlowVariable[];
+  recordedWindowSize?: { width: number; height: number };  // window size when recorded — restored at playback
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────

@@ -1,8 +1,9 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Switch from '@radix-ui/react-switch';
 import { Layout, Maximize2, Crop, Move, Presentation } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/appStore';
+import { app as appIpc } from '@/lib/ipc';
 import type { DerivedSlide } from '@/lib/slides';
 import type { PptxLayout, FlowStep } from '@shared/types';
 
@@ -23,14 +24,44 @@ const HANDLE_CURSORS: Record<HandleId, string> = {
 interface SlideCanvasProps {
   slide: DerivedSlide;
   globalLayout?: PptxLayout;
+  flowName?: string;
   onUpdateStep: (stepId: string, updates: Partial<FlowStep>) => void;
 }
 
-export function SlideCanvas({ slide, globalLayout, onUpdateStep }: SlideCanvasProps) {
+export function SlideCanvas({ slide, globalLayout, flowName, onUpdateStep }: SlideCanvasProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [activeInteraction, setActiveInteraction] = useState<InteractionMode | null>(null);
   const [cropMode, setCropMode] = useState(false);
+  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [imageNaturalSize, setImageNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const templateSlides = useAppStore(s => s.templateSlides);
+
+  // Load preview image: try previewPath first, then find latest output screenshot by flow name
+  useEffect(() => {
+    setImageDataUrl(null);
+    let cancelled = false;
+
+    async function loadImage() {
+      // 1. Try previewPath (from recording or run result)
+      const previewPath = slide.captureStep.previewPath;
+      if (previewPath) {
+        const dataUrl = await appIpc.readImage(previewPath);
+        if (!cancelled && dataUrl) { setImageDataUrl(dataUrl); return; }
+      }
+      // 2. Fallback: find latest output screenshot for this flow by name + slide index
+      if (flowName) {
+        const screenshots = await appIpc.getFlowScreenshots(flowName);
+        if (!cancelled && screenshots.length > 0) {
+          const idx = slide.slideIndex;
+          if (idx < screenshots.length) {
+            setImageDataUrl(screenshots[idx].dataUrl);
+          }
+        }
+      }
+    }
+    loadImage();
+    return () => { cancelled = true; };
+  }, [slide.captureStep.previewPath, slide.slideIndex, flowName]);
 
   const dragRef = useRef<{
     mode: InteractionMode;
@@ -71,10 +102,33 @@ export function SlideCanvas({ slide, globalLayout, onUpdateStep }: SlideCanvasPr
   const round2 = (n: number) => Math.round(n * 100) / 100;
   const toPct = (inches: number, total: number) => (inches / total) * 100;
 
-  const imgLeft = toPct(layout.imageX, SLIDE_W);
-  const imgTop = toPct(layout.imageY, SLIDE_H);
-  const imgWidth = toPct(layout.imageW, SLIDE_W);
-  const imgHeight = toPct(layout.imageH, SLIDE_H);
+  // Compute the image box — when fitMode is 'contain' and we know the image size,
+  // shrink the box to tightly wrap the image (like PowerPoint selection handles)
+  let boxX = layout.imageX;
+  let boxY = layout.imageY;
+  let boxW = layout.imageW;
+  let boxH = layout.imageH;
+
+  if (imageDataUrl && imageNaturalSize && layout.fitMode === 'contain') {
+    const imgAspect = imageNaturalSize.w / imageNaturalSize.h;
+    const boxAspect = layout.imageW / layout.imageH;
+    if (imgAspect > boxAspect) {
+      // Image is wider — height shrinks, center vertically
+      const fittedH = layout.imageW / imgAspect;
+      boxY = layout.imageY + (layout.imageH - fittedH) / 2;
+      boxH = fittedH;
+    } else {
+      // Image is taller — width shrinks, center horizontally
+      const fittedW = layout.imageH * imgAspect;
+      boxX = layout.imageX + (layout.imageW - fittedW) / 2;
+      boxW = fittedW;
+    }
+  }
+
+  const imgLeft = toPct(boxX, SLIDE_W);
+  const imgTop = toPct(boxY, SLIDE_H);
+  const imgWidth = toPct(boxW, SLIDE_W);
+  const imgHeight = toPct(boxH, SLIDE_H);
 
   // ─── Drag: move the image box ──────────────────────────────────────
   const startMove = (e: React.MouseEvent) => {
@@ -251,7 +305,7 @@ export function SlideCanvas({ slide, globalLayout, onUpdateStep }: SlideCanvasPr
           {slide.title || 'Untitled'}
         </span>
         <span className="text-xs text-ds-text-dim ml-auto">
-          {slide.captureStep.previewPath ? 'Live preview' : 'Placeholder'} · {region.width}x{region.height}px
+          {imageDataUrl ? 'Live preview' : slide.captureStep.previewPath ? 'Loading...' : 'Placeholder'} · {region.width}x{region.height}px
         </span>
       </div>
 
@@ -422,16 +476,20 @@ export function SlideCanvas({ slide, globalLayout, onUpdateStep }: SlideCanvasPr
             }}
           >
             {/* Screenshot preview or placeholder */}
-            {slide.captureStep.previewPath ? (
+            {imageDataUrl ? (
               <img
-                src={`dsfile:///${slide.captureStep.previewPath.replace(/\\/g, '/')}`}
+                src={imageDataUrl}
                 alt={slide.title}
                 className="absolute inset-0 w-full h-full"
                 style={{
-                  objectFit: layout.fitMode === 'stretch' ? 'fill' : layout.fitMode === 'fill' ? 'cover' : 'contain',
+                  objectFit: layout.fitMode === 'stretch' ? 'fill' : 'cover',
                   clipPath: hasCrop ? `inset(${cropInset.top} ${cropInset.right} ${cropInset.bottom} ${cropInset.left})` : undefined,
                 }}
                 draggable={false}
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  setImageNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
+                }}
               />
             ) : (
               <>

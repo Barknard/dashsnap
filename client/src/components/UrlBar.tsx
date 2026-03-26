@@ -129,17 +129,17 @@ export function UrlBar() {
   return (
     <div className="flex-1 flex items-center gap-1.5 px-2">
       <Tooltip content="Back">
-        <Button variant="ghost" size="icon-sm" onClick={() => browser.back()}>
+        <Button variant="outline" size="icon-sm" onClick={() => browser.back()}>
           <ChevronLeft className="w-4 h-4" />
         </Button>
       </Tooltip>
       <Tooltip content="Forward">
-        <Button variant="ghost" size="icon-sm" onClick={() => browser.forward()}>
+        <Button variant="outline" size="icon-sm" onClick={() => browser.forward()}>
           <ChevronRight className="w-4 h-4" />
         </Button>
       </Tooltip>
       <Tooltip content="Reload">
-        <Button variant="ghost" size="icon-sm" onClick={() => { setIsLoading(true); browser.reload(); }}>
+        <Button variant="outline" size="icon-sm" onClick={() => { setIsLoading(true); browser.reload(); }}>
           <RotateCw className={cn('w-3.5 h-3.5', isLoading && 'animate-spin')} />
         </Button>
       </Tooltip>

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Camera, Plus, Clock, CheckCircle2, AlertTriangle, XCircle,
@@ -6,6 +7,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
+import { app as appIpc } from '@/lib/ipc';
 import type { DerivedSlide } from '@/lib/slides';
 import type { PptxLayout } from '@shared/types';
 
@@ -51,6 +53,7 @@ interface SlideCardProps {
   slide: DerivedSlide;
   isSelected: boolean;
   slideNumber: number;
+  flowName?: string;
   onSelect: () => void;
   onDelete: (stepId: string) => void;
   onDuplicate?: (stepId: string) => void;
@@ -61,6 +64,7 @@ export function SlideCard({
   slide,
   isSelected,
   slideNumber,
+  flowName,
   onSelect,
   onDelete,
   onDuplicate,
@@ -73,6 +77,28 @@ export function SlideCard({
 
   const actionCount = slide.actions.length;
   const region = slide.captureStep.region;
+
+  // Load thumbnail via IPC — try previewPath, then find latest output screenshot
+  const [thumbDataUrl, setThumbDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    setThumbDataUrl(null);
+    let cancelled = false;
+    async function load() {
+      const p = slide.captureStep.previewPath;
+      if (p) {
+        const d = await appIpc.readImage(p);
+        if (!cancelled && d) { setThumbDataUrl(d); return; }
+      }
+      if (flowName) {
+        const shots = await appIpc.getFlowScreenshots(flowName);
+        if (!cancelled && shots.length > 0 && slide.slideIndex < shots.length) {
+          setThumbDataUrl(shots[slide.slideIndex].dataUrl);
+        }
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [slide.captureStep.previewPath, slide.slideIndex, flowName]);
 
   return (
     <motion.div
@@ -95,10 +121,10 @@ export function SlideCard({
     >
       <div className="group flex items-center gap-2.5 p-3">
         {/* Thumbnail or slide number */}
-        {slide.captureStep.previewPath ? (
+        {thumbDataUrl ? (
           <div className="relative w-12 h-8 rounded overflow-hidden shrink-0 bg-ds-bg border border-ds-border/50">
             <img
-              src={`dsfile:///${slide.captureStep.previewPath.replace(/\\/g, '/')}`}
+              src={thumbDataUrl}
               alt={slide.title}
               className="w-full h-full object-cover"
               draggable={false}
